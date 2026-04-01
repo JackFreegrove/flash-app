@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       cancel_url: `${req.headers.origin}?cancelled=true`,
     });
 
-    res.status(200).json({ sessionId: session.id });
+    res.status(200).json({ url: session.url });
   } catch (error) {
     console.error('Stripe error:', error);
     res.status(500).json({ error: error.message });

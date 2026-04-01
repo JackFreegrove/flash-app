@@ -294,7 +294,6 @@ const FAKE_PHOTOS = [
 function PricingPage({ onSelect }) {
  const handleCheckout = async (priceId, tier) => {
     try {
-      const stripe = await stripePromise;
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -304,13 +303,14 @@ function PricingPage({ onSelect }) {
           mode: priceId === PRICES.archive ? 'subscription' : 'payment',
         }),
       });
-      const { sessionId, error } = await response.json();
+      const { url, error } = await response.json();
       if (error) throw new Error(error);
-      await stripe.redirectToCheckout({ sessionId });
+      window.location.href = url;
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Something went wrong. Please try again.');
     }
+  };
   };
 
   const tiers = [
