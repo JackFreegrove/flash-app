@@ -311,7 +311,7 @@ function PricingPage({ onSelect }) {
       alert('Something went wrong. Please try again.');
     }
   };
-  };
+  
 
   const tiers = [
     { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '5', life: '7 days', archive: 'Add-on', priceId: PRICES.momento },
