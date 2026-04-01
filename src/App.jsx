@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { QRCodeSVG } from 'qrcode.react';
+import { loadStripe } from '@stripe/stripe-js';
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
+const PRICES = {
+  momento: 'price_1TFzdKRoyXRpjOGpQ1HHI9UM',
+  classic: 'price_1TFzdtRoyXRpjOGpQTHJGKQ0',
+  premium: 'price_1TFzexRoyXRpjOGpFMusLaZn',
+  venuePartner: 'price_1TFzhARoyXRpjOGp4z6BAswn',
+  archive: 'price_1TFzi0RoyXRpjOGpfO3J11AL',
+};
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
   bg: "#F9F7F4",
@@ -281,7 +291,71 @@ const FAKE_PHOTOS = [
   "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
   "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&q=80",
 ];
+function PricingPage({ onSelect }) {
+ const handleCheckout = async (priceId, tier) => {
+    try {
+      const stripe = await stripePromise;
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          priceId,
+          tier,
+          mode: priceId === PRICES.archive ? 'subscription' : 'payment',
+        }),
+      });
+      const { sessionId, error } = await response.json();
+      if (error) throw new Error(error);
+      await stripe.redirectToCheckout({ sessionId });
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('Something went wrong. Please try again.');
+    }
+  };
 
+  const tiers = [
+    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '5', life: '7 days', archive: 'Add-on', priceId: PRICES.momento },
+    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '8', life: '14 days', archive: 'Add-on', priceId: PRICES.classic, popular: true },
+    { key: 'premium', label: 'Premium', price: '€169', guests: 'Unlimited', photos: '10', life: '30 days', archive: '1 year free', priceId: PRICES.premium },
+    { key: 'venuePartner', label: 'Venue Partner', price: '€299', guests: 'Unlimited', photos: '10', life: '60 days', archive: '2 years free', priceId: PRICES.venuePartner },
+  ];
+
+  return (
+    <div>
+      <div className="section-title">Choose your <em>Plan</em></div>
+      <div className="section-sub">One payment. No subscription. Cancel anytime.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 32 }}>
+        {tiers.map(tier => (
+          <div key={tier.key} className="card" style={{ position: 'relative', border: tier.popular ? `2px solid ${COLORS.accent}` : undefined }}>
+            {tier.popular && (
+              <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', background: COLORS.accent, color: 'white', padding: '2px 14px', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: 2 }}>
+                Most Popular
+              </div>
+            )}
+            <div className="card-title">{tier.label}</div>
+            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 36, marginBottom: 16 }}>{tier.price}</div>
+            <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 20, lineHeight: 2 }}>
+              <div>👥 {tier.guests} guests</div>
+              <div>📷 {tier.photos} photos each</div>
+              <div>⏱ Album live for {tier.life}</div>
+              <div>🗄 Archive: {tier.archive}</div>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)}>
+              Book Now →
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ textAlign: 'center' }}>
+        <div className="card-title">Archive Add-On</div>
+        <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
+        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')}>
+          Add Archive — €15/yr
+        </button>
+      </div>
+    </div>
+  );
+}
 // ── HOST: Create Event ────────────────────────────────────────────────────────
 function CreateEvent({ onCreate }) {
   const [form, setForm] = useState({
@@ -622,7 +696,7 @@ const DEMO_EVENT = {
 
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [view, setView] = useState("host-dashboard"); // host-create | host-dashboard | host-album | guest-entry | guest-camera
+  const [view, setView] = useState("pricing"); // host-create | host-dashboard | host-album | guest-entry | guest-camera
   const [event, setEvent] = useState(DEMO_EVENT);
   const [takerId, setTakerId] = useState("");
 
@@ -633,10 +707,9 @@ export default function App() {
     { id: "host", label: "Host View" },
     { id: "guest", label: "Guest View" },
   ];
-  const activeTab = view.startsWith("host") ? "host" : "guest";
-
+  const activeTab = view === "guest-entry" || view === "guest-camera" ? "guest" : "host";
   const switchTab = (tab) => {
-    if (tab === "host") setView(event ? "host-dashboard" : "host-create");
+    if (tab === "host") setView(event ? "host-dashboard" : "pricing");
     else setView("guest-entry");
   };
 
@@ -656,6 +729,7 @@ export default function App() {
         </nav>
 
         <main className="main">
+          {view === "pricing" && <PricingPage onSelect={(tier) => setView("host-create")} />}
           {view === "host-create" && <CreateEvent onCreate={handleCreate} />}
           {view === "host-dashboard" && event && (
             <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("host-create")} />
