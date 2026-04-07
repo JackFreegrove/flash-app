@@ -15,7 +15,7 @@ There are no tests configured in this project.
 
 ## Architecture
 
-**Flash** is a disposable camera-style photo app for events. Hosts create an event and share a QR code; guests scan it, take photos, and the album is revealed after a configured delay.
+**Snapshot Co** is a disposable camera-style photo app for events. Hosts create an event and share a QR code; guests scan it, take photos, and the album is revealed after a configured delay.
 
 ### Stack
 - **Frontend**: React 19 SPA (Vite, JSX, no TypeScript)

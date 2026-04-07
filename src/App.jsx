@@ -590,7 +590,7 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(`https://flash-app-gamma.vercel.app/event/${event.id}`)
+    navigator.clipboard.writeText(`https://eventsnapshotco.com/event/${event.id}`)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   };
 
@@ -606,10 +606,10 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
 
       <div className="qr-card">
         <div ref={qrRef} className="qr-box">
-          <QRCodeSVG value={`https://flash-app-gamma.vercel.app/event/${event.id}`} size={160} />
+          <QRCodeSVG value={`https://eventsnapshotco.com/event/${event.id}`} size={160} />
         </div>
         <div className="qr-event-name">{event.name}</div>
-        <div className="qr-meta">Scan to open camera · flash-app-gamma.vercel.app/event/{event.id}</div>
+        <div className="qr-meta">Scan to open camera · eventsnapshotco.com/event/{event.id}</div>
         <div style={{display:"flex",gap:12,justifyContent:"center"}}>
           <button className="btn btn-outline btn-sm" onClick={downloadQR}>Download QR</button>
           <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button>
@@ -972,7 +972,7 @@ export default function App() {
       <style>{css}</style>
       <div className="app">
         <nav className="nav">
-          <div className="nav-logo">flash<span>.</span></div>
+          <div className="nav-logo">Snapshot <span>Co</span></div>
           <div className="nav-tabs">
             {tabs.map(t => (
               <button key={t.id} className={`nav-tab ${activeTab === t.id ? "active" : ""}`} onClick={() => switchTab(t.id)}>
