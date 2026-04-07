@@ -466,6 +466,10 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     const revealDate = new Date(eventDate);
     revealDate.setDate(revealDate.getDate() + 1);
     revealDate.setHours(rh, rm, 0, 0);
+    // expires_at = 14 days after reveal (matches the UI "expires after 2 weeks" setting)
+    const expiresAt = new Date(revealDate);
+    expiresAt.setDate(expiresAt.getDate() + 14);
+
     const { data, error } = await supabase.from('events').insert({
       name: form.name,
       date: form.date,
@@ -473,6 +477,9 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
       reveal_time: revealDate.toISOString(),
       is_public: form.isPublic,
       tier: initialTier,
+      archived: false,
+      archive_expires_at: null,
+      expires_at: expiresAt.toISOString(),
     }).select('id').single();
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
