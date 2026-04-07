@@ -729,23 +729,44 @@ function AlbumView({ event, onBack }) {
 function GuestCamera({ event, takerId }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const [facingMode, setFacingMode] = useState("environment");
   const [permDenied, setPermDenied] = useState(false);
   const [shots, setShots] = useState([]);
   const [flashing, setFlashing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [done, setDone] = useState(false);
   const maxShots = event.photos;
 
+  // Restart stream whenever facingMode changes
   useEffect(() => {
-    let s;
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(stream => { s = stream; if (videoRef.current) videoRef.current.srcObject = stream; })
-      .catch(() => setPermDenied(true));
-    return () => s?.getTracks().forEach(t => t.stop());
-  }, []);
+    let active = true;
+    setSwitching(true);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode }, audio: false })
+      .then(stream => {
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setSwitching(false);
+      })
+      .catch(() => { setPermDenied(true); setSwitching(false); });
+
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [facingMode]);
+
+  const flipCamera = () => {
+    if (uploading || switching) return;
+    setFacingMode(f => f === "environment" ? "user" : "environment");
+  };
 
   const takeShot = useCallback(async () => {
-    if (shots.length >= maxShots || flashing || uploading) return;
+    if (shots.length >= maxShots || flashing || uploading || switching) return;
     setFlashing(true);
     setTimeout(() => setFlashing(false), 150);
 
@@ -754,7 +775,13 @@ function GuestCamera({ event, takerId }) {
     if (!v || !c) return;
     c.width = v.videoWidth || 400;
     c.height = v.videoHeight || 533;
-    c.getContext("2d").drawImage(v, 0, 0);
+    const ctx = c.getContext("2d");
+    // Un-mirror front camera so the saved photo isn't flipped
+    if (facingMode === "user") {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(v, 0, 0);
 
     // Convert canvas to blob and upload
     c.toBlob(async (blob) => {
@@ -781,7 +808,7 @@ function GuestCamera({ event, takerId }) {
         setTimeout(() => setDone(true), 600);
       }
     }, 'image/jpeg', 0.85);
-  }, [shots, maxShots, flashing, uploading, takerId, event.id]);
+  }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id]);
 
   if (done) {
     return (
@@ -827,16 +854,36 @@ function GuestCamera({ event, takerId }) {
       </div>
 
       <div className="camera-wrap">
-        <video ref={videoRef} className="camera-video" autoPlay playsInline muted />
+        <video
+          ref={videoRef}
+          className="camera-video"
+          autoPlay
+          playsInline
+          muted
+          style={facingMode === "user" ? { transform: "scaleX(-1)" } : {}}
+        />
         <canvas ref={canvasRef} style={{display:"none"}} />
         <div className={`flash-overlay ${flashing ? "flash" : ""}`} />
         <div className="camera-overlay">
           <div className="camera-top">
             <div className="shot-counter">{shots.length} / {maxShots}</div>
+            <button
+              onClick={flipCamera}
+              disabled={uploading || switching}
+              style={{
+                background: "rgba(0,0,0,0.45)", border: "none", color: "white",
+                width: 34, height: 34, borderRadius: "50%", cursor: "pointer",
+                fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: (uploading || switching) ? 0.35 : 1, transition: "opacity 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              ↺
+            </button>
           </div>
           <div className="camera-bottom">
-            <button className="shutter" onClick={takeShot} disabled={shots.length >= maxShots || uploading}>
-              <div className="shutter-inner" style={uploading ? { opacity: 0.4 } : {}} />
+            <button className="shutter" onClick={takeShot} disabled={shots.length >= maxShots || uploading || switching}>
+              <div className="shutter-inner" style={(uploading || switching) ? { opacity: 0.4 } : {}} />
             </button>
           </div>
         </div>
