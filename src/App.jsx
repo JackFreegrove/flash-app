@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { QRCodeSVG } from 'qrcode.react';
-import { loadStripe } from '@stripe/stripe-js';
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+import { supabase } from './supabase';
 
 const PRICES = {
   momento: 'price_1TFzdKRoyXRpjOGpQ1HHI9UM',
@@ -9,6 +8,13 @@ const PRICES = {
   premium: 'price_1TFzexRoyXRpjOGpFMusLaZn',
   venuePartner: 'price_1TFzhARoyXRpjOGp4z6BAswn',
   archive: 'price_1TFzi0RoyXRpjOGpfO3J11AL',
+};
+
+const TIER_PHOTOS = {
+  momento: 5,
+  classic: 5,
+  premium: 8,
+  venuePartner: 10,
 };
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
@@ -269,7 +275,7 @@ const css = `
 
 // ── Countdown timer ───────────────────────────────────────────────────────────
 function useCountdown(targetTime) {
-  const [remaining, setRemaining] = useState(0);
+  const [remaining, setRemaining] = useState(() => Math.max(0, targetTime - Date.now()));
   useEffect(() => {
     const tick = () => setRemaining(Math.max(0, targetTime - Date.now()));
     tick();
@@ -282,17 +288,96 @@ function useCountdown(targetTime) {
   return { remaining, display: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` };
 }
 
-// ── Fake photos (colored placeholders with grain) ────────────────────────────
-const FAKE_PHOTOS = [
-  "https://images.unsplash.com/photo-1519741497674-611481863552?w=400&q=80",
-  "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=400&q=80",
-  "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=400&q=80",
-  "https://images.unsplash.com/photo-1529636444744-adffc9135a5e?w=400&q=80",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
-  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400&q=80",
-];
+// ── AUTH: Sign Up ─────────────────────────────────────────────────────────────
+function SignUp({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSignUp = async () => {
+    if (!email || !password) return;
+    setLoading(true);
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) setError(error.message);
+    else onLogin();
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 400, margin: "0 auto", padding: "40px 20px" }}>
+      <div className="section-title">Create <em>Account</em></div>
+      <div className="section-sub">Host your first event</div>
+      <div className="card">
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Email</label>
+          <input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+        </div>
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Password</label>
+          <input type="password" placeholder="Min 6 characters" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+        {error && <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 12 }}>{error}</div>}
+        <button className="btn btn-primary btn-full" onClick={handleSignUp} disabled={loading}>
+          {loading ? "Creating account..." : "Create Account →"}
+        </button>
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: COLORS.muted }}>
+          Already have an account? <span style={{ cursor: "pointer", color: COLORS.accent, textDecoration: "underline" }} onClick={() => onLogin("login")}>Sign in</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AUTH: Login ───────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) return;
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setError(error.message);
+    else onLogin();
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ maxWidth: 400, margin: "0 auto", padding: "40px 20px" }}>
+      <div className="section-title">Welcome <em>Back</em></div>
+      <div className="section-sub">Sign in to your account</div>
+      <div className="card">
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Email</label>
+          <input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+        </div>
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Password</label>
+          <input type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+        {error && <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 12 }}>{error}</div>}
+        <button className="btn btn-primary btn-full" onClick={handleLogin} disabled={loading}>
+          {loading ? "Signing in..." : "Sign In →"}
+        </button>
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: COLORS.muted }}>
+          New here? <span style={{ cursor: "pointer", color: COLORS.accent, textDecoration: "underline" }} onClick={() => onLogin("signup")}>Create account</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 function PricingPage({ onSelect }) {
- const handleCheckout = async (priceId, tier) => {
+  const [loadingTier, setLoadingTier] = useState(null);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  const handleCheckout = async (priceId, tier) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { onSelect(tier); return; }
+    setLoadingTier(tier);
+    setCheckoutError("");
     try {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -308,10 +393,11 @@ function PricingPage({ onSelect }) {
       window.location.href = url;
     } catch (err) {
       console.error('Checkout error:', err);
-      alert('Something went wrong. Please try again.');
+      setCheckoutError('Something went wrong. Please try again.');
+      setLoadingTier(null);
     }
   };
-  
+
 
   const tiers = [
     { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '5', life: '7 days', archive: 'Add-on', priceId: PRICES.momento },
@@ -340,8 +426,8 @@ function PricingPage({ onSelect }) {
               <div>⏱ Album live for {tier.life}</div>
               <div>🗄 Archive: {tier.archive}</div>
             </div>
-            <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)}>
-              Book Now →
+            <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
+              {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
             </button>
           </div>
         ))}
@@ -349,33 +435,47 @@ function PricingPage({ onSelect }) {
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="card-title">Archive Add-On</div>
         <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
-        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')}>
-          Add Archive — €15/yr
+        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null}>
+          {loadingTier === 'archive' ? "Redirecting…" : "Add Archive — €15/yr"}
         </button>
       </div>
+      {checkoutError && <div style={{ color: COLORS.danger, fontSize: 11, marginTop: 12, textAlign: 'center' }}>{checkoutError}</div>}
     </div>
   );
 }
 // ── HOST: Create Event ────────────────────────────────────────────────────────
-function CreateEvent({ onCreate }) {
+function CreateEvent({ onCreate, initialPhotos }) {
   const [form, setForm] = useState({
     name: "",
     date: "",
-    photos: "8",
+    photos: String(initialPhotos ?? 8),
     revealTime: "10:00",
     isPublic: false,
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  const handleCreate = () => {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const handleCreate = async () => {
     if (!form.name || !form.date) return;
-    // Reveal = next day at chosen time
+    setSaving(true);
+    setSaveError("");
     const eventDate = new Date(form.date);
     const [rh, rm] = form.revealTime.split(":").map(Number);
     const revealDate = new Date(eventDate);
     revealDate.setDate(revealDate.getDate() + 1);
     revealDate.setHours(rh, rm, 0, 0);
-    onCreate({ ...form, id: Date.now().toString(36), revealDate, photos: Number(form.photos), shotsTaken: [], guests: [] });
+    const { data, error } = await supabase.from('events').insert({
+      name: form.name,
+      date: form.date,
+      photos_per_guest: Number(form.photos),
+      reveal_time: revealDate.toISOString(),
+      is_public: form.isPublic,
+    }).select('id').single();
+    setSaving(false);
+    if (error) { setSaveError(error.message); return; }
+    onCreate({ id: data.id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, shotsTaken: [], guests: [] });
   };
 
   return (
@@ -427,8 +527,9 @@ function CreateEvent({ onCreate }) {
         </div>
       </div>
 
-      <button className="btn btn-primary btn-full" onClick={handleCreate}>
-        Generate QR Code →
+      {saveError && <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 12 }}>{saveError}</div>}
+      <button className="btn btn-primary btn-full" onClick={handleCreate} disabled={saving}>
+        {saving ? "Saving…" : "Generate QR Code →"}
       </button>
     </div>
   );
@@ -438,8 +539,52 @@ function CreateEvent({ onCreate }) {
 function HostDashboard({ event, onViewAlbum, onNewEvent }) {
   const { display, remaining } = useCountdown(event.revealDate?.getTime() || 0);
   const revealed = remaining === 0;
-  const guestCount = event.guests?.length || 0;
-  const photoCount = event.shotsTaken?.length || 0;
+  const qrRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [guestCount, setGuestCount] = useState(0);
+
+  useEffect(() => {
+    supabase
+      .from('photos')
+      .select('taker_name')
+      .eq('event_id', event.id)
+      .then(({ data }) => {
+        if (data) {
+          setPhotoCount(data.length);
+          setGuestCount(new Set(data.map(r => r.taker_name)).size);
+        }
+      });
+  }, [event.id]);
+
+  const downloadQR = () => {
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) return;
+    const serialized = new XMLSerializer().serializeToString(svg);
+    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, 400, 400);
+      ctx.drawImage(img, 0, 0, 400, 400);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = url;
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(`https://flash-app-gamma.vercel.app/event/${event.id}`)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
 
   return (
     <div>
@@ -452,14 +597,14 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
       </div>
 
       <div className="qr-card">
-        <div className="qr-box">
-          <QRCodeSVG value={`https://flash.app/event/${event.id}`} size={160} />
+        <div ref={qrRef} className="qr-box">
+          <QRCodeSVG value={`https://flash-app-gamma.vercel.app/event/${event.id}`} size={160} />
         </div>
         <div className="qr-event-name">{event.name}</div>
-        <div className="qr-meta">Scan to open camera · flash.app/event/{event.id}</div>
+        <div className="qr-meta">Scan to open camera · flash-app-gamma.vercel.app/event/{event.id}</div>
         <div style={{display:"flex",gap:12,justifyContent:"center"}}>
-          <button className="btn btn-outline btn-sm">Download QR</button>
-          <button className="btn btn-outline btn-sm">Copy Link</button>
+          <button className="btn btn-outline btn-sm" onClick={downloadQR}>Download QR</button>
+          <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button>
         </div>
         <div className="qr-stats">
           <div><div className="qr-stat-val">{guestCount}</div><div className="qr-stat-lbl">Guests</div></div>
@@ -479,8 +624,8 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
             <div className="countdown-lbl">Album reveals in</div>
             <div className="countdown">{display}</div>
             <div className="countdown-lbl" style={{marginTop:4}}>
-              {new Date(event.revealDate).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} at{" "}
-              {new Date(event.revealDate).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}
+              {event.revealDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} at{" "}
+              {event.revealDate.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}
             </div>
             <div style={{marginTop:20}}>
               <button className="btn btn-outline btn-sm" onClick={onViewAlbum}>Preview Album (Host Only)</button>
@@ -494,9 +639,51 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
 
 // ── HOST: Album View ──────────────────────────────────────────────────────────
 function AlbumView({ event, onBack }) {
-  const { remaining } = useCountdown(event.revealDate?.getTime() || 0);
+  const { remaining, display } = useCountdown(event.revealDate?.getTime() || 0);
   const revealed = remaining === 0;
-  const photos = event.shotsTaken || [];
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from('photos')
+      .select('id, taker_name, storage_path, taken_at')
+      .eq('event_id', event.id)
+      .order('taken_at', { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          setPhotos(data.map(row => ({
+            url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
+            taker: row.taker_name,
+            takenAt: row.taken_at,
+          })));
+        }
+        setLoading(false);
+      });
+  }, [event.id]);
+
+  if (!revealed) {
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
+          <button className="btn btn-outline btn-sm" onClick={onBack}>← Back</button>
+          <div>
+            <div className="section-title" style={{marginBottom:0}}>{event.name}</div>
+            <div className="section-sub" style={{marginBottom:0}}>Album locked until reveal</div>
+          </div>
+        </div>
+        <div className="card" style={{textAlign:"center"}}>
+          <div className="countdown-lbl">Album reveals in</div>
+          <div className="countdown">{display}</div>
+          <div className="countdown-lbl" style={{marginTop:4}}>
+            {new Date(event.revealDate).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} at{" "}
+            {new Date(event.revealDate).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}
+          </div>
+          <div style={{marginTop:12,fontSize:10,color:COLORS.muted}}>{photos.length} photo{photos.length !== 1 ? "s" : ""} taken so far</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -508,13 +695,9 @@ function AlbumView({ event, onBack }) {
         </div>
       </div>
 
-      {!revealed && (
-        <div style={{marginBottom:20}}>
-          <div className="album-reveal-badge">⏳ Locked — not yet revealed to guests</div>
-        </div>
-      )}
-
-      {photos.length === 0 ? (
+      {loading ? (
+        <div style={{textAlign:"center",padding:"60px 20px",color:COLORS.muted,fontSize:12,letterSpacing:"0.06em"}}>Loading photos…</div>
+      ) : photos.length === 0 ? (
         <div className="album-locked">
           <div className="lock-icon">📷</div>
           <div className="lock-title">No photos yet</div>
@@ -538,45 +721,59 @@ function AlbumView({ event, onBack }) {
 function GuestCamera({ event, takerId }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const [stream, setStream] = useState(null);
   const [permDenied, setPermDenied] = useState(false);
   const [shots, setShots] = useState([]);
   const [flashing, setFlashing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const maxShots = event.photos;
 
   useEffect(() => {
     let s;
     navigator.mediaDevices?.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(stream => { s = stream; setStream(stream); if (videoRef.current) videoRef.current.srcObject = stream; })
+      .then(stream => { s = stream; if (videoRef.current) videoRef.current.srcObject = stream; })
       .catch(() => setPermDenied(true));
     return () => s?.getTracks().forEach(t => t.stop());
   }, []);
 
-  const takeShot = useCallback(() => {
-    if (shots.length >= maxShots || flashing) return;
+  const takeShot = useCallback(async () => {
+    if (shots.length >= maxShots || flashing || uploading) return;
     setFlashing(true);
     setTimeout(() => setFlashing(false), 150);
 
-    // Capture from video or use placeholder
-    let url;
-    if (videoRef.current && canvasRef.current) {
-      const v = videoRef.current;
-      const c = canvasRef.current;
-      c.width = v.videoWidth || 400;
-      c.height = v.videoHeight || 533;
-      c.getContext("2d").drawImage(v, 0, 0);
-      url = c.toDataURL("image/jpeg", 0.85);
-    } else {
-      url = FAKE_PHOTOS[shots.length % FAKE_PHOTOS.length];
-    }
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c) return;
+    c.width = v.videoWidth || 400;
+    c.height = v.videoHeight || 533;
+    c.getContext("2d").drawImage(v, 0, 0);
 
-    const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
-    setShots(newShots);
-    if (newShots.length >= maxShots) {
-      setTimeout(() => setDone(true), 600);
-    }
-  }, [shots, maxShots, flashing, takerId]);
+    // Convert canvas to blob and upload
+    c.toBlob(async (blob) => {
+      if (!blob) return;
+      setUploading(true);
+      const path = `${event.id}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+
+      if (!uploadError) {
+        await supabase.from('photos').insert({
+          event_id: event.id,
+          taker_name: takerId,
+          storage_path: path,
+        });
+      }
+      setUploading(false);
+
+      const url = c.toDataURL("image/jpeg", 0.85);
+      const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
+      setShots(newShots);
+      if (newShots.length >= maxShots) {
+        setTimeout(() => setDone(true), 600);
+      }
+    }, 'image/jpeg', 0.85);
+  }, [shots, maxShots, flashing, uploading, takerId, event.id]);
 
   if (done) {
     return (
@@ -630,8 +827,8 @@ function GuestCamera({ event, takerId }) {
             <div className="shot-counter">{shots.length} / {maxShots}</div>
           </div>
           <div className="camera-bottom">
-            <button className="shutter" onClick={takeShot} disabled={shots.length >= maxShots}>
-              <div className="shutter-inner" />
+            <button className="shutter" onClick={takeShot} disabled={shots.length >= maxShots || uploading}>
+              <div className="shutter-inner" style={uploading ? { opacity: 0.4 } : {}} />
             </button>
           </div>
         </div>
@@ -667,7 +864,7 @@ function GuestEntry({ event, onEnter }) {
         <div className="card-title">Your Name or Nickname</div>
         <div className="field" style={{marginBottom:16}}>
           <label>Taker ID</label>
-          <input placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} />
+          <input placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim())} />
         </div>
         <div style={{fontSize:10,color:COLORS.muted,marginBottom:20,lineHeight:1.7}}>
           You'll get {event.photos} shots. No retakes, no filters, no preview. Album reveals the next day.
@@ -680,25 +877,71 @@ function GuestEntry({ event, onEnter }) {
   );
 }
 
-// ── DEMO EVENT ────────────────────────────────────────────────────────────────
-const DEMO_EVENT = {
-  id: "demo123",
-  name: "Sarah & James Wedding",
-  date: "2026-03-12",
-  photos: 8,
-  isPublic: false,
-  revealDate: new Date(Date.now() + 3 * 3600 * 1000), // reveals in 3 hrs
-  guests: ["Aunt Mary", "Uncle Dave"],
-  shotsTaken: FAKE_PHOTOS.map((url, i) => ({
-    url, taker: ["Aunt Mary","Uncle Dave","Cousin Al","Table 5"][i % 4], time: Date.now() - i * 60000
-  })),
-};
-
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
+function rowToEvent(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    date: data.date,
+    photos: data.photos_per_guest,
+    revealDate: new Date(data.reveal_time),
+    isPublic: data.is_public,
+    shotsTaken: [],
+    guests: [],
+  };
+}
+
 export default function App() {
-  const [view, setView] = useState("pricing"); // host-create | host-dashboard | host-album | guest-entry | guest-camera
-  const [event, setEvent] = useState(DEMO_EVENT);
+  const [view, setView] = useState("pricing");
+  const [event, setEvent] = useState(null);
   const [takerId, setTakerId] = useState("");
+  const [user, setUser] = useState(null);
+  const [initialPhotos, setInitialPhotos] = useState(null);
+  const [loadingEvent, setLoadingEvent] = useState(false);
+  const [eventNotFound, setEventNotFound] = useState(false);
+
+  // Guest deep-link: /event/:id
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/event\/([^/]+)$/);
+    if (!match) return;
+    const eventId = match[1];
+    setLoadingEvent(true);
+    supabase.from('events').select('*').eq('id', eventId).single()
+      .then(({ data, error }) => {
+        setLoadingEvent(false);
+        if (error || !data) { setEventNotFound(true); return; }
+        setEvent(rowToEvent(data));
+        setView("guest-entry");
+      });
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true") {
+      const tier = params.get("tier");
+      const photos = TIER_PHOTOS[tier] ?? null;
+      setInitialPhotos(photos);
+      setView("host-create");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user && view === "login") setView("pricing");
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setView("pricing");
+  };
 
   const handleCreate = (ev) => { setEvent(ev); setView("host-dashboard"); };
   const handleGuestEnter = (id) => { setTakerId(id); setView("guest-camera"); };
@@ -708,9 +951,10 @@ export default function App() {
     { id: "guest", label: "Guest View" },
   ];
   const activeTab = view === "guest-entry" || view === "guest-camera" ? "guest" : "host";
+
   const switchTab = (tab) => {
     if (tab === "host") setView(event ? "host-dashboard" : "pricing");
-    else setView("guest-entry");
+    else if (event) setView("guest-entry");
   };
 
   return (
@@ -726,22 +970,41 @@ export default function App() {
               </button>
             ))}
           </div>
+          {user && (
+            <button className="btn btn-outline btn-sm" onClick={handleSignOut}>Sign Out</button>
+          )}
         </nav>
 
         <main className="main">
-          {view === "pricing" && <PricingPage onSelect={(tier) => setView("host-create")} />}
-          {view === "host-create" && <CreateEvent onCreate={handleCreate} />}
-          {view === "host-dashboard" && event && (
-            <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("host-create")} />
-          )}
-          {view === "host-album" && event && (
-            <AlbumView event={event} onBack={() => setView("host-dashboard")} />
-          )}
-          {view === "guest-entry" && (
-            <GuestEntry event={event || DEMO_EVENT} onEnter={handleGuestEnter} />
-          )}
-          {view === "guest-camera" && (
-            <GuestCamera event={event || DEMO_EVENT} takerId={takerId} />
+          {loadingEvent ? (
+            <div style={{ textAlign: "center", padding: "80px 20px", color: COLORS.muted, fontSize: 12, letterSpacing: "0.06em" }}>
+              Loading event…
+            </div>
+          ) : eventNotFound ? (
+            <div style={{ textAlign: "center", padding: "80px 20px" }}>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.4 }}>📷</div>
+              <div className="section-title">Event <em>not found</em></div>
+              <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 8 }}>This link may have expired or the event was removed.</div>
+            </div>
+          ) : (
+            <>
+              {view === "signup" && <SignUp onLogin={(v) => setView(v === "login" ? "login" : "pricing")} />}
+              {view === "login" && <Login onLogin={(v) => v === "signup" ? setView("signup") : setView("pricing")} />}
+              {view === "pricing" && <PricingPage onSelect={(tier) => user ? setView("host-create") : setView("signup")} />}
+              {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} />}
+              {view === "host-dashboard" && event && (
+                <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
+              )}
+              {view === "host-album" && event && (
+                <AlbumView event={event} onBack={() => setView("host-dashboard")} />
+              )}
+              {view === "guest-entry" && event && (
+                <GuestEntry event={event} onEnter={handleGuestEnter} />
+              )}
+              {view === "guest-camera" && event && (
+                <GuestCamera event={event} takerId={takerId} />
+              )}
+            </>
           )}
         </main>
       </div>
