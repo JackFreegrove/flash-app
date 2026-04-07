@@ -444,7 +444,7 @@ function PricingPage({ onSelect }) {
   );
 }
 // ── HOST: Create Event ────────────────────────────────────────────────────────
-function CreateEvent({ onCreate, initialPhotos }) {
+function CreateEvent({ onCreate, initialPhotos, initialTier }) {
   const [form, setForm] = useState({
     name: "",
     date: "",
@@ -472,6 +472,7 @@ function CreateEvent({ onCreate, initialPhotos }) {
       photos_per_guest: Number(form.photos),
       reveal_time: revealDate.toISOString(),
       is_public: form.isPublic,
+      tier: initialTier,
     }).select('id').single();
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
@@ -897,6 +898,7 @@ export default function App() {
   const [takerId, setTakerId] = useState("");
   const [user, setUser] = useState(null);
   const [initialPhotos, setInitialPhotos] = useState(null);
+  const [initialTier, setInitialTier] = useState(null);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
 
@@ -921,6 +923,7 @@ export default function App() {
       const tier = params.get("tier");
       const photos = TIER_PHOTOS[tier] ?? null;
       setInitialPhotos(photos);
+      setInitialTier(tier ?? null);
       setView("host-create");
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -991,7 +994,7 @@ export default function App() {
               {view === "signup" && <SignUp onLogin={(v) => setView(v === "login" ? "login" : "pricing")} />}
               {view === "login" && <Login onLogin={(v) => v === "signup" ? setView("signup") : setView("pricing")} />}
               {view === "pricing" && <PricingPage onSelect={(tier) => user ? setView("host-create") : setView("signup")} />}
-              {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} />}
+              {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
               {view === "host-dashboard" && event && (
                 <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
               )}
