@@ -267,6 +267,8 @@ const css = `
     .main { padding: 32px 16px; }
     .form-row { grid-template-columns: 1fr; }
     .album-grid { grid-template-columns: repeat(2, 1fr); }
+    .field input, .field select { font-size: 16px; }
+    .btn-sm { padding: 12px 16px; }
   }
 `;
 
@@ -401,8 +403,8 @@ function PricingPage({ onSelect }) {
 
   const tiers = [
     { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '5', life: '7 days', archive: 'Add-on', priceId: PRICES.momento },
-    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '8', life: '14 days', archive: 'Add-on', priceId: PRICES.classic, popular: true },
-    { key: 'premium', label: 'Premium', price: '€169', guests: 'Unlimited', photos: '10', life: '30 days', archive: '1 year free', priceId: PRICES.premium },
+    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '5', life: '14 days', archive: 'Add-on', priceId: PRICES.classic, popular: true },
+    { key: 'premium', label: 'Premium', price: '€169', guests: 'Unlimited', photos: '8', life: '30 days', archive: '1 year free', priceId: PRICES.premium },
     { key: 'venuePartner', label: 'Venue Partner', price: '€299', guests: 'Unlimited', photos: '10', life: '60 days', archive: '2 years free', priceId: PRICES.venuePartner },
   ];
 
@@ -524,14 +526,21 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
             <div className="toggle-label">Public Album</div>
             <div className="toggle-desc">Anyone with the link can view after reveal</div>
           </div>
-          <div className={`toggle ${form.isPublic ? "on" : ""}`} onClick={() => set("isPublic", !form.isPublic)} />
+          <div
+            className={`toggle ${form.isPublic ? "on" : ""}`}
+            role="switch"
+            aria-checked={form.isPublic}
+            tabIndex={0}
+            onClick={() => set("isPublic", !form.isPublic)}
+            onKeyDown={e => (e.key === ' ' || e.key === 'Enter') && set("isPublic", !form.isPublic)}
+          />
         </div>
         <div className="toggle-row">
           <div>
             <div className="toggle-label">Album expires after 2 weeks</div>
             <div className="toggle-desc">Photos automatically removed 14 days after reveal</div>
           </div>
-          <div className="toggle on" style={{pointerEvents:"none"}} />
+          <div className="toggle on" role="switch" aria-checked={true} style={{pointerEvents:"none"}} />
         </div>
       </div>
 
@@ -651,6 +660,7 @@ function AlbumView({ event, onBack }) {
   const revealed = remaining === 0;
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState("");
 
   useEffect(() => {
     if (!revealed) return;
@@ -660,8 +670,10 @@ function AlbumView({ event, onBack }) {
       .select('id, taker_name, storage_path, taken_at')
       .eq('event_id', event.id)
       .order('taken_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error) {
+          setFetchError("Failed to load photos. Please refresh.");
+        } else if (data) {
           setPhotos(data.map(row => ({
             url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
             taker: row.taker_name,
@@ -707,6 +719,8 @@ function AlbumView({ event, onBack }) {
 
       {loading ? (
         <div style={{textAlign:"center",padding:"60px 20px",color:COLORS.muted,fontSize:12,letterSpacing:"0.06em"}}>Loading photos…</div>
+      ) : fetchError ? (
+        <div style={{textAlign:"center",padding:"60px 20px",color:COLORS.danger,fontSize:12,letterSpacing:"0.06em"}}>{fetchError}</div>
       ) : photos.length === 0 ? (
         <div className="album-locked">
           <div className="lock-icon">📷</div>
@@ -717,7 +731,7 @@ function AlbumView({ event, onBack }) {
         <div className="album-grid">
           {photos.map((p, i) => (
             <div className="album-photo" key={i}>
-              <img src={p.url} alt="" loading="lazy" />
+              <img src={p.url} alt={`Photo by ${p.taker}`} loading="lazy" />
               <div className="photo-meta">{p.taker} · #{i + 1}</div>
             </div>
           ))}
@@ -739,6 +753,7 @@ function GuestCamera({ event, takerId }) {
   const [uploading, setUploading] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [done, setDone] = useState(false);
+  const [shotError, setShotError] = useState("");
   const maxShots = event.photos;
 
   // Restart stream whenever facingMode changes
@@ -769,6 +784,7 @@ function GuestCamera({ event, takerId }) {
 
   const takeShot = useCallback(async () => {
     if (shots.length >= maxShots || flashing || uploading || switching) return;
+    setShotError("");
     setFlashing(true);
     setTimeout(() => setFlashing(false), 150);
 
@@ -794,13 +810,16 @@ function GuestCamera({ event, takerId }) {
         .from('photos')
         .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
 
-      if (!uploadError) {
-        await supabase.from('photos').insert({
-          event_id: event.id,
-          taker_name: takerId,
-          storage_path: path,
-        });
+      if (uploadError) {
+        setUploading(false);
+        setShotError("Photo didn't save. Tap the shutter to try again.");
+        return;
       }
+      await supabase.from('photos').insert({
+        event_id: event.id,
+        taker_name: takerId,
+        storage_path: path,
+      });
       setUploading(false);
 
       const url = c.toDataURL("image/jpeg", 0.85);
@@ -868,14 +887,15 @@ function GuestCamera({ event, takerId }) {
         <div className={`flash-overlay ${flashing ? "flash" : ""}`} />
         <div className="camera-overlay">
           <div className="camera-top">
-            <div className="shot-counter">{shots.length} / {maxShots}</div>
+            <div className="shot-counter">{uploading ? "Saving…" : `${shots.length} / ${maxShots}`}</div>
             <button
+              aria-label="Flip camera"
               onClick={flipCamera}
               disabled={uploading || switching}
               style={{
                 background: "rgba(0,0,0,0.45)", border: "none", color: "white",
-                width: 34, height: 34, borderRadius: "50%", cursor: "pointer",
-                fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+                width: 44, height: 44, borderRadius: "50%", cursor: "pointer",
+                fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
                 opacity: (uploading || switching) ? 0.35 : 1, transition: "opacity 0.2s",
                 flexShrink: 0,
               }}
@@ -884,7 +904,7 @@ function GuestCamera({ event, takerId }) {
             </button>
           </div>
           <div className="camera-bottom">
-            <button className="shutter" onClick={takeShot} disabled={shots.length >= maxShots || uploading || switching}>
+            <button className="shutter" aria-label="Take photo" onClick={takeShot} disabled={shots.length >= maxShots || uploading || switching}>
               <div className="shutter-inner" style={(uploading || switching) ? { opacity: 0.4 } : {}} />
             </button>
           </div>
@@ -900,7 +920,12 @@ function GuestCamera({ event, takerId }) {
         ))}
       </div>
 
-      <div style={{marginTop:12, fontSize:10, color:COLORS.muted, textAlign:"center", letterSpacing:"0.05em"}}>
+      {shotError && (
+        <div style={{marginTop:12, fontSize:11, color:COLORS.danger, textAlign:"center", letterSpacing:"0.04em"}}>
+          {shotError}
+        </div>
+      )}
+      <div style={{marginTop:8, fontSize:10, color:COLORS.muted, textAlign:"center", letterSpacing:"0.05em"}}>
         No retakes · No filters · No previews
       </div>
     </div>
@@ -920,8 +945,8 @@ function GuestEntry({ event, onEnter }) {
       <div className="card">
         <div className="card-title">Your Name or Nickname</div>
         <div className="field" style={{marginBottom:16}}>
-          <label>Taker ID</label>
-          <input placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} maxLength={60} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim().slice(0, 60))} />
+          <label htmlFor="taker-id">Taker ID</label>
+          <input id="taker-id" placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} maxLength={60} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim().slice(0, 60))} />
         </div>
         <div style={{fontSize:10,color:COLORS.muted,marginBottom:20,lineHeight:1.7}}>
           You'll get {event.photos} shots. No retakes, no filters, no preview. Album reveals the next day.
