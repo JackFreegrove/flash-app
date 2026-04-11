@@ -82,7 +82,7 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
    - Shot count must NOT reset when switching cameras
    - Must work iOS Safari + Android Chrome
 2. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
-3. Security hardening (price ID whitelist, rate limiting, input validation)
+3. Security hardening (done)
 4. Switch Stripe test → live mode (only after tasks 2+3 complete)
 5. Fix photos per guest to correct tier values (see above)
 6. Privacy Policy + T&Cs page (/legal route)
