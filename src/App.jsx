@@ -507,7 +507,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
           <div className="field">
             <label>Photos per Guest</label>
             <select value={form.photos} onChange={e => set("photos", e.target.value)}>
-              {[5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} photos</option>)}
+              {[5,6,7,8,9,10].filter(n => n <= (initialPhotos ?? 10)).map(n => <option key={n} value={n}>{n} photos</option>)}
             </select>
           </div>
           <div className="field">
@@ -921,12 +921,12 @@ function GuestEntry({ event, onEnter }) {
         <div className="card-title">Your Name or Nickname</div>
         <div className="field" style={{marginBottom:16}}>
           <label>Taker ID</label>
-          <input placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim())} />
+          <input placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} maxLength={60} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim().slice(0, 60))} />
         </div>
         <div style={{fontSize:10,color:COLORS.muted,marginBottom:20,lineHeight:1.7}}>
           You'll get {event.photos} shots. No retakes, no filters, no preview. Album reveals the next day.
         </div>
-        <button className="btn btn-primary btn-full" onClick={() => id.trim() && onEnter(id.trim())}>
+        <button className="btn btn-primary btn-full" onClick={() => id.trim() && onEnter(id.trim().slice(0, 60))}>
           Open Camera →
         </button>
       </div>
