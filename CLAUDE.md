@@ -75,17 +75,14 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
 - Album reveal with countdown timer
 - Archive add-on subscription
 - Vercel auto-deployment
+- Selfie/front camera toggle in GuestCamera.jsx
+- Security hardening
+- Fix photos per guest to correct tier values
 
 ### PENDING BUILD TASKS (priority order)
-1. Selfie/front camera toggle in GuestCamera.jsx
-   - Button top-right of viewfinder, toggles facingMode "environment"/"user"
-   - Shot count must NOT reset when switching cameras
-   - Must work iOS Safari + Android Chrome
-2. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
-3. Security hardening (done)
-4. Switch Stripe test → live mode (only after tasks 2+3 complete)
-5. Fix photos per guest to correct tier values (see above)
-6. Privacy Policy + T&Cs page (/legal route)
+1. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
+2. Switch Stripe test → live mode (only after task 1 and 3 complete)
+3. Privacy Policy + T&Cs page (/legal route)
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
