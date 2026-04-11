@@ -650,9 +650,11 @@ function AlbumView({ event, onBack }) {
   const { remaining, display } = useCountdown(event.revealDate?.getTime() || 0);
   const revealed = remaining === 0;
   const [photos, setPhotos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!revealed) return;
+    setLoading(true);
     supabase
       .from('photos')
       .select('id, taker_name, storage_path, taken_at')
@@ -668,7 +670,7 @@ function AlbumView({ event, onBack }) {
         }
         setLoading(false);
       });
-  }, [event.id]);
+  }, [event.id, revealed]);
 
   if (!revealed) {
     return (
@@ -948,6 +950,7 @@ function rowToEvent(data) {
 
 export default function App() {
   const [view, setView] = useState("pricing");
+  const viewRef = useRef("pricing");
   const [event, setEvent] = useState(null);
   const [takerId, setTakerId] = useState("");
   const [user, setUser] = useState(null);
@@ -983,13 +986,16 @@ export default function App() {
     }
   }, []);
 
+  // Keep viewRef current so the auth callback always sees the latest view value
+  useEffect(() => { viewRef.current = view; }, [view]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user && view === "login") setView("pricing");
+      if (session?.user && viewRef.current === "login") setView("pricing");
     });
     return () => subscription.unsubscribe();
   }, []);
