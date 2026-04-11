@@ -1,61 +1,101 @@
-# CLAUDE.md
+# Snapshot Co — Project Memory for Claude Code
+# Auto-read at session start. Last updated: April 2026.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## WHAT THIS PRODUCT IS
+Browser-based SaaS recreating the disposable camera experience at weddings and events.
+Guests scan QR code → fixed photo limit → no retakes, no filters, no preview → album reveals next day.
+No app download required. The constraints are the product.
 
-## Commands
+## LIVE URLS
+- App: flash-app-gamma.vercel.app
+- Domain (purchased, not yet connected): EventSnapshotCo.com
+- GitHub: github.com/JackFreegrove/flash-app
+- Deployment: GitHub main → Vercel auto-deploy (~60 seconds)
 
-```bash
-npm run dev       # Start Vite dev server with HMR
-npm run build     # Production build
-npm run lint      # Run ESLint
-npm run preview   # Preview production build locally
+## TECH STACK
+- Frontend: React + Vite, JavaScript/JSX only (NO TypeScript)
+- Styling: Plain CSS only (NO Tailwind, NO CSS frameworks)
+- Auth: Supabase Auth (email/password)
+- DB: Supabase PostgreSQL
+- Storage: Supabase Storage (photos/{event_uuid}/{photo_uuid}.jpg)
+- Payments: Stripe via Vercel serverless functions (/api directory)
+- Hosting: Vercel
+
+## CRITICAL RULES — NEVER VIOLATE
+1. NEVER hardcode API keys, Stripe keys, or Supabase credentials in code
+2. NEVER rename .flash-overlay, flashing, or setFlashing — these are the camera shutter effect
+3. NEVER switch Stripe to live mode without explicit instruction
+4. NEVER introduce TypeScript, Tailwind, or new UI libraries
+5. NEVER modify Supabase RLS policies without showing exact SQL first for review
+6. NEVER delete or overwrite working components without explicit confirmation
+7. NEVER push without a descriptive commit message
+8. ALWAYS explain what you are about to do in plain English before writing code
+9. ALWAYS make one change at a time — confirm it works before proceeding
+10. ALWAYS match existing code style and naming conventions
+
+## PRICING — NEVER CHANGE
+| Tier          | Price  | Mode           |
+|---------------|--------|----------------|
+| Momento       | €59    | One-off payment|
+| Classic       | €99    | One-off payment|
+| Premium       | €169   | One-off payment|
+| Venue Partner | €299   | One-off payment|
+| Archive add-on| €15/yr | Subscription   |
+
+## PHOTOS PER GUEST (correct values)
+- Momento: 5 photos
+- Classic: 5 photos
+- Premium: 8 photos
+- Venue Partner: 10 photos
+
+## DATABASE SCHEMA
+```sql
+events (id UUID PK, host_id UUID, name TEXT, event_date DATE, reveal_time TIMESTAMPTZ,
+        photos_per_guest INT, max_guests INT, is_public BOOL, tier TEXT, created_at TIMESTAMPTZ)
+guests (id UUID PK, event_id UUID FK, name TEXT, photos_taken INT DEFAULT 0, joined_at TIMESTAMPTZ)
+photos (id UUID PK, event_id UUID FK, guest_id UUID FK, storage_path TEXT, taken_at TIMESTAMPTZ)
 ```
 
-There are no tests configured in this project.
+## ENVIRONMENT VARIABLES (Vercel + .env.local)
+VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+STRIPE_SECRET_KEY (server only — never expose to frontend)
+VITE_STRIPE_PUBLISHABLE_KEY
+STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM
+STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
 
-## Architecture
+## FEATURE STATUS
+### WORKING — DO NOT TOUCH
+- Host auth (signup/login/logout) via Supabase
+- Pricing page, 4 tiers
+- Stripe checkout (TEST MODE)
+- Event creation form
+- QR code generation (links to eventsnapshotco.com/event/{id})
+- Guest browser camera — rear camera, shot countdown
+- Photo upload to Supabase Storage
+- Album reveal with countdown timer
+- Archive add-on subscription
+- Vercel auto-deployment
 
-**Snapshot Co** is a disposable camera-style photo app for events. Hosts create an event and share a QR code; guests scan it, take photos, and the album is revealed after a configured delay.
+### PENDING BUILD TASKS (priority order)
+1. Selfie/front camera toggle in GuestCamera.jsx
+   - Button top-right of viewfinder, toggles facingMode "environment"/"user"
+   - Shot count must NOT reset when switching cameras
+   - Must work iOS Safari + Android Chrome
+2. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
+3. Security hardening (price ID whitelist, rate limiting, input validation)
+4. Switch Stripe test → live mode (only after tasks 2+3 complete)
+5. Fix photos per guest to correct tier values (see above)
+6. Privacy Policy + T&Cs page (/legal route)
 
-### Stack
-- **Frontend**: React 19 SPA (Vite, JSX, no TypeScript)
-- **Backend**: Single Vercel serverless function (`api/create-checkout-session.js`) — creates Stripe checkout sessions
-- **Auth & DB**: Supabase (`src/supabase.js`) — email/password auth
-- **Payments**: Stripe — one-time payments + optional annual subscription (archive add-on)
-- **Deployment**: Vercel
+### FUTURE ONLY — DO NOT BUILD YET
+- Physical photo album via Prodigi API
+- Event merchandise (canvas, keyrings, mugs)
 
-### Frontend structure (`src/App.jsx`)
-
-The entire app lives in one ~860-line file. View state is managed with a single `view` state variable that switches between named views. There is no router.
-
-Views and their roles:
-- `signup` / `login` — Supabase auth
-- `pricing` — `PricingPage` component, 4 tiers + archive add-on via Stripe
-- `create-event` — `CreateEvent` form (event config: guest limit, photos/guest, reveal time, expiry)
-- `host-dashboard` — `HostDashboard` QR code display, live stats, countdown timer (`useCountdown` hook)
-- `album` — `AlbumView` photo gallery
-- `guest-entry` — `GuestEntry` taker ID input
-- `guest-camera` — `GuestCamera` camera capture (no retakes, no preview)
-
-### Styling approach
-
-All CSS is injected via a `<style>` tag inside `App.jsx` using a template literal (`const css = \`...\``). A `COLORS` constant holds the design tokens. Fonts: Cormorant Garamond (headings, serif) and DM Mono (body, monospace).
-
-### Environment variables
-
-| Variable | Used in |
-|---|---|
-| `VITE_SUPABASE_URL` | `src/supabase.js` |
-| `VITE_SUPABASE_ANON_KEY` | `src/supabase.js` |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | `src/App.jsx` (loadStripe) |
-| `STRIPE_SECRET_KEY` | `api/create-checkout-session.js` (server-side only) |
-
-`VITE_` prefixed variables are bundled into the client. `STRIPE_SECRET_KEY` must remain server-side only.
-
-### Stripe price IDs
-
-Hardcoded in `App.jsx` as `PRICES`:
-- `momento`, `classic`, `premium`, `venuePartner` — one-time payments
-- `archive` — recurring subscription (€15/year)
-
-The serverless function (`api/create-checkout-session.js`) accepts `{ priceId, tier, mode }` where `mode` is `"payment"` or `"subscription"`.
+## HOW TO START EACH SESSION
+Use this format:
+[TASK]: What needs doing
+[FILE]: Which file(s)
+[CURRENT STATE]: What the code does now
+[DESIRED STATE]: What it should do after
+[CONSTRAINTS]: Any limitations
+[DO NOT TOUCH]: Related code that must not change
