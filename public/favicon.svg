@@ -1,13 +1,7 @@
-<svg width="200" height="140" viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_2_11)">
-<path d="M190 20H10C4.47715 20 0 24.4772 0 30V130C0 135.523 4.47715 140 10 140H190C195.523 140 200 135.523 200 130V30C200 24.4772 195.523 20 190 20Z" stroke="#2C2C2A" stroke-width="2.5"/>
-<path d="M182 0H142C138.686 0 136 2.68629 136 6V26C136 29.3137 138.686 32 142 32H182C185.314 32 188 29.3137 188 26V6C188 2.68629 185.314 0 182 0Z" stroke="#2C2C2A" stroke-width="2.5"/>
-<path d="M80 116C99.8823 116 116 99.8823 116 80C116 60.1177 99.8823 44 80 44C60.1177 44 44 60.1177 44 80C44 99.8823 60.1177 116 80 116Z" stroke="#2C2C2A" stroke-width="2.5"/>
-<path d="M80 94C87.732 94 94 87.732 94 80C94 72.268 87.732 66 80 66C72.268 66 66 72.268 66 80C66 87.732 72.268 94 80 94Z" fill="#2C2C2A"/>
-</g>
-<defs>
-<clipPath id="clip0_2_11">
-<rect width="200" height="140" fill="white"/>
-</clipPath>
-</defs>
+<svg width="32" height="32" viewBox="0 0 100 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="70" fill="white"/>
+  <rect x="1" y="11" width="98" height="58" rx="5" stroke="#1A1A1A" stroke-width="3"/>
+  <rect x="67" y="1" width="26" height="16" rx="3" stroke="#1A1A1A" stroke-width="3"/>
+  <circle cx="40" cy="40" r="18" stroke="#1A1A1A" stroke-width="3"/>
+  <circle cx="40" cy="40" r="7" fill="#1A1A1A"/>
 </svg>

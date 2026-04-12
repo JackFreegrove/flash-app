@@ -3,20 +3,20 @@
   <rect width="400" height="100" fill="white"/>
   
   <!-- Camera body -->
-  <rect x="2" y="18" width="80" height="48" rx="4" stroke="#2C2C2A" stroke-width="2.5"/>
+  <rect x="2" y="18" width="80" height="48" rx="4" stroke="#1A1A1A" stroke-width="2.5"/>
   
   <!-- Viewfinder -->
-  <rect x="55" y="8" width="22" height="14" rx="2.5" stroke="#2C2C2A" stroke-width="2.5"/>
+  <rect x="55" y="8" width="22" height="14" rx="2.5" stroke="#1A1A1A" stroke-width="2.5"/>
   
   <!-- Lens outer -->
-  <circle cx="32" cy="42" r="15" stroke="#2C2C2A" stroke-width="2.5"/>
+  <circle cx="32" cy="42" r="15" stroke="#1A1A1A" stroke-width="2.5"/>
   
   <!-- Lens inner -->
-  <circle cx="32" cy="42" r="6" fill="#2C2C2A"/>
+  <circle cx="32" cy="42" r="6" fill="#1A1A1A"/>
   
   <!-- Text: Snapshot -->
-  <text x="100" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#2C2C2A">Snapshot</text>
+  <text x="100" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#1A1A1A">Snapshot</text>
   
   <!-- Text: Co. -->
-  <text x="100" y="76" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#2C2C2A">Co.</text>
+  <text x="100" y="76" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#1A1A1A">Co.</text>
 </svg>

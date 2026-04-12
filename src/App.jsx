@@ -18,13 +18,13 @@ const TIER_PHOTOS = {
 };
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
-  bg: "#F9F7F4",
-  surface: "#FFFFFF",
-  border: "#E8E4DF",
-  text: "#1A1714",
-  muted: "#8A847D",
-  accent: "#2C2C2C",
-  highlight: "#D4A853",
+  bg: "#FFFFFF",
+  surface: "#F5F5F5",
+  border: "#E5E5E5",
+  text: "#1A1A1A",
+  muted: "#6B6B6B",
+  accent: "#1A1A1A",
+  highlight: "#1A1A1A",
   danger: "#C0392B",
   success: "#27AE60",
 };
@@ -121,12 +121,12 @@ const css = `
     font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
     text-transform: uppercase; transition: all 0.2s;
   }
-  .btn-primary { background: #D85A30; color: white; }
-  .btn-primary:hover { background: #C04E28; }
+  .btn-primary { background: #1A1A1A; color: white; }
+  .btn-primary:hover { background: #333333; }
   .btn-outline { background: none; border: 1px solid ${COLORS.border}; color: ${COLORS.text}; }
   .btn-outline:hover { border-color: ${COLORS.accent}; }
   .btn-gold { background: ${COLORS.highlight}; color: white; }
-  .btn-gold:hover { background: #b8922e; }
+  .btn-gold:hover { background: #333333; }
   .btn-sm { padding: 8px 16px; font-size: 10px; }
   .btn-full { width: 100%; }
 
@@ -498,7 +498,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
         <div className="form-row">
           <div className="field">
             <label>Event Name</label>
-            <input placeholder="Sarah & James Wedding" value={form.name} onChange={e => set("name", e.target.value)} />
+            <input placeholder="Summer Gala 2025" value={form.name} onChange={e => set("name", e.target.value)} />
           </div>
           <div className="field">
             <label>Event Date</label>
