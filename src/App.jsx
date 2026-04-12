@@ -121,8 +121,8 @@ const css = `
     font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
     text-transform: uppercase; transition: all 0.2s;
   }
-  .btn-primary { background: ${COLORS.accent}; color: white; }
-  .btn-primary:hover { background: #000; }
+  .btn-primary { background: #D85A30; color: white; }
+  .btn-primary:hover { background: #C04E28; }
   .btn-outline { background: none; border: 1px solid ${COLORS.border}; color: ${COLORS.text}; }
   .btn-outline:hover { border-color: ${COLORS.accent}; }
   .btn-gold { background: ${COLORS.highlight}; color: white; }
@@ -1050,7 +1050,7 @@ export default function App() {
       <style>{css}</style>
       <div className="app">
         <nav className="nav">
-          <div className="nav-logo">Snapshot <span>Co</span></div>
+          <img src="/logo.svg" alt="Snapshot Co" style={{height: '40px'}} />
           <div className="nav-tabs">
             {tabs.map(t => (
               <button key={t.id} className={`nav-tab ${activeTab === t.id ? "active" : ""}`} onClick={() => switchTab(t.id)}>

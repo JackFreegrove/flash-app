@@ -1,0 +1,22 @@
+<svg width="200" height="50" viewBox="0 0 400 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background -->
+  <rect width="400" height="100" fill="white"/>
+  
+  <!-- Camera body -->
+  <rect x="2" y="18" width="80" height="48" rx="4" stroke="#2C2C2A" stroke-width="2.5"/>
+  
+  <!-- Viewfinder -->
+  <rect x="55" y="8" width="22" height="14" rx="2.5" stroke="#2C2C2A" stroke-width="2.5"/>
+  
+  <!-- Lens outer -->
+  <circle cx="32" cy="42" r="15" stroke="#2C2C2A" stroke-width="2.5"/>
+  
+  <!-- Lens inner -->
+  <circle cx="32" cy="42" r="6" fill="#2C2C2A"/>
+  
+  <!-- Text: Snapshot -->
+  <text x="100" y="42" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#2C2C2A">Snapshot</text>
+  
+  <!-- Text: Co. -->
+  <text x="100" y="76" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="600" fill="#2C2C2A">Co.</text>
+</svg>
