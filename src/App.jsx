@@ -376,8 +376,8 @@ function PricingPage({ onSelect }) {
   const [checkoutError, setCheckoutError] = useState("");
 
   const handleCheckout = async (priceId, tier) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { onSelect(tier); return; }
+    const { data } = await supabase.auth.getSession();
+    if (!data?.session) { onSelect(tier); return; }
     setLoadingTier(tier);
     setCheckoutError("");
     try {
@@ -463,7 +463,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     if (!form.name || !form.date) return;
     setSaving(true);
     setSaveError("");
-    const eventDate = new Date(form.date);
+    const eventDate = new Date(form.date + 'T00:00:00');
     const [rh, rm] = form.revealTime.split(":").map(Number);
     const revealDate = new Date(eventDate);
     revealDate.setDate(revealDate.getDate() + 1);
@@ -472,7 +472,9 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     const expiresAt = new Date(revealDate);
     expiresAt.setDate(expiresAt.getDate() + 14);
 
-    const { data, error } = await supabase.from('events').insert({
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from('events').insert({
+      id,
       name: form.name,
       date: form.date,
       photos_per_guest: Number(form.photos),
@@ -482,10 +484,10 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
       archived: false,
       archive_expires_at: null,
       expires_at: expiresAt.toISOString(),
-    }).select('id').single();
+    });
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
-    onCreate({ id: data.id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, shotsTaken: [], guests: [] });
+    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, shotsTaken: [], guests: [] });
   };
 
   return (
@@ -554,7 +556,8 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
 
 // ── HOST: QR + Dashboard ──────────────────────────────────────────────────────
 function HostDashboard({ event, onViewAlbum, onNewEvent }) {
-  const { display, remaining } = useCountdown(event.revealDate?.getTime() || 0);
+  const revealMs = event.revealDate instanceof Date && !isNaN(event.revealDate) ? event.revealDate.getTime() : Infinity;
+  const { display, remaining } = useCountdown(revealMs);
   const revealed = remaining === 0;
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -564,12 +567,13 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
   useEffect(() => {
     supabase
       .from('photos')
-      .select('taker_name')
+      .select('taker_id')
       .eq('event_id', event.id)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { console.error('Failed to load photo stats:', error); return; }
         if (data) {
           setPhotoCount(data.length);
-          setGuestCount(new Set(data.map(r => r.taker_name)).size);
+          setGuestCount(new Set(data.map(r => r.taker_id)).size);
         }
       });
   }, [event.id]);
@@ -595,6 +599,7 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
       a.href = canvas.toDataURL('image/png');
       a.click();
     };
+    img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
   };
 
@@ -667,17 +672,17 @@ function AlbumView({ event, onBack }) {
     setLoading(true);
     supabase
       .from('photos')
-      .select('id, taker_name, storage_path, taken_at')
+      .select('id, taker_id, storage_path, created_at')
       .eq('event_id', event.id)
-      .order('taken_at', { ascending: true })
+      .order('created_at', { ascending: true })
       .then(({ data, error }) => {
         if (error) {
           setFetchError("Failed to load photos. Please refresh.");
         } else if (data) {
           setPhotos(data.map(row => ({
             url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
-            taker: row.taker_name,
-            takenAt: row.taken_at,
+            taker: row.taker_id,
+            takenAt: row.created_at,
           })));
         }
         setLoading(false);
@@ -815,12 +820,17 @@ function GuestCamera({ event, takerId }) {
         setShotError("Photo didn't save. Tap the shutter to try again.");
         return;
       }
-      await supabase.from('photos').insert({
+      const { error: dbError } = await supabase.from('photos').insert({
         event_id: event.id,
-        taker_name: takerId,
+        taker_id: takerId,
         storage_path: path,
       });
       setUploading(false);
+
+      if (dbError) {
+        setShotError("Photo didn't save. Tap the shutter to try again.");
+        return;
+      }
 
       const url = c.toDataURL("image/jpeg", 0.85);
       const newShots = [...shots, { url, taker: takerId, time: Date.now() }];

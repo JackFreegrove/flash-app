@@ -27,8 +27,8 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode,
-      success_url: `${req.headers.origin}?success=true&tier=${tier}`,
-      cancel_url: `${req.headers.origin}?cancelled=true`,
+      success_url: `${req.headers.origin || 'https://flash-app-gamma.vercel.app'}?success=true&tier=${tier}`,
+      cancel_url: `${req.headers.origin || 'https://flash-app-gamma.vercel.app'}?cancelled=true`,
     });
 
     res.status(200).json({ url: session.url });
