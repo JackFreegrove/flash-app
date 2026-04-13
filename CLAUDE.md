@@ -81,6 +81,16 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
 - - UI/UX audit complete (11 findings fixed — iOS zoom, upload error handling, 
   touch targets, accessibility, album fetch errors, pricing display)
 - Transactional email sequence planned (Resend) — not yet built
+- - UI/UX audit complete (11 findings fixed — iOS zoom, upload error handling, 
+  touch targets, accessibility, album fetch errors, pricing display)
+- Critical bug fixes (April 2026):
+  - Photo column names corrected (taker_id, created_at) — photo system now works
+  - Photo insert error handling — failed uploads show error, retain shot
+  - Stripe origin header fallback — checkout no longer breaks without Origin header
+  - Reveal date guard — invalid dates no longer show album as immediately revealed
+  - Timezone fix — reveal date parsed in local time not UTC
+  - Auth crash fix — getSession uses optional chaining
+  - QR download blob URL leak fixed
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
@@ -92,6 +102,18 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
 6. Album view UI refinement + merchandise CTA placeholder at reveal
 7. Transactional email sequence via Resend (6 emails — see business plan)
 8. hello@eventsnapshotco.com setup (after domain connected)
+9. 4. Stripe webhook handler — payment bypass vulnerability (Finding 6) 
+   must be resolved before Stripe goes live. Get explanation from Claude 
+   Code before building.
+5. Connect EventSnapshotCo.com to Vercel (DNS — waiting on father's 
+   registrar details)
+6. Switch Stripe test → live mode (only after tasks 4 and 5 complete)
+7. Privacy Policy + T&Cs page (/legal route)
+8. Album sort/filter (chronological vs grouped by taker)
+9. Album view UI refinement + merchandise CTA placeholder
+10. Transactional email sequence via Resend (6 emails)
+11. hello@eventsnapshotco.com (after domain connected)
+12. Landing page (after domain connected and Stripe live)
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
