@@ -78,11 +78,20 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
 - Selfie/front camera toggle in GuestCamera.jsx
 - Security hardening
 - Fix photos per guest to correct tier values
+- - UI/UX audit complete (11 findings fixed — iOS zoom, upload error handling, 
+  touch targets, accessibility, album fetch errors, pricing display)
+- Transactional email sequence planned (Resend) — not yet built
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
 2. Switch Stripe test → live mode (only after task 1 and 3 complete)
 3. Privacy Policy + T&Cs page (/legal route)
+4. 4. Intermittent event creation bug — investigate and fix (sometimes fails 
+   on Supabase insert during event creation / QR generation)
+5. Album sort/filter feature (chronological vs grouped by taker)
+6. Album view UI refinement + merchandise CTA placeholder at reveal
+7. Transactional email sequence via Resend (6 emails — see business plan)
+8. hello@eventsnapshotco.com setup (after domain connected)
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
