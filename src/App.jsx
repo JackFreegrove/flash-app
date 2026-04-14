@@ -405,7 +405,7 @@ function PricingPage({ onSelect }) {
 
 
   const topTiers = [
-    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '3 each', life: '5 days', archive: 'Add-on €15/yr', priceId: PRICES.momento },
+    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '3 each', life: '5 days', archive: 'Add-on €15/yr', priceId: PRICES.momento, subtitle: 'Ideal for hens, stags & small parties' },
     { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '5 each', life: '14 days', archive: 'Add-on €15/yr', priceId: PRICES.classic, popular: true },
   ];
   const premiumTier = { key: 'premium', label: 'Premium', price: '€199', guests: 'Unlimited', photos: '10 each', life: '60 days', archive: '1 year free', priceId: PRICES.premium, bestValue: true };
@@ -423,7 +423,8 @@ function PricingPage({ onSelect }) {
         </div>
       )}
       <div className="card-title">{tier.label}</div>
-      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: fullWidth ? 44 : 36, marginBottom: 16 }}>{tier.price}</div>
+      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: fullWidth ? 44 : 36, marginBottom: tier.subtitle ? 6 : 16 }}>{tier.price}</div>
+      {tier.subtitle && <div style={{ fontSize: 11, color: COLORS.muted, fontStyle: 'italic', letterSpacing: '0.06em', marginBottom: 16 }}>{tier.subtitle}</div>}
       <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 20, lineHeight: 2, display: fullWidth ? 'grid' : undefined, gridTemplateColumns: fullWidth ? 'repeat(2, 1fr)' : undefined }}>
         <div>👥 {tier.guests} guests</div>
         <div>📷 {tier.photos} photos each</div>
