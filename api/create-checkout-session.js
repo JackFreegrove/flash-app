@@ -1,11 +1,10 @@
 import Stripe from 'stripe';
 
 const VALID_PRICES = {
-  price_1TFzdKRoyXRpjOGpQ1HHI9UM: { tier: 'momento',      mode: 'payment' },
-  price_1TFzdtRoyXRpjOGpQTHJGKQ0: { tier: 'classic',      mode: 'payment' },
-  price_1TFzexRoyXRpjOGpFMusLaZn: { tier: 'premium',      mode: 'payment' },
-  price_1TFzhARoyXRpjOGp4z6BAswn: { tier: 'venuePartner', mode: 'payment' },
-  price_1TFzi0RoyXRpjOGpfO3J11AL: { tier: 'archive',      mode: 'subscription' },
+  price_1TME3URoyXRpjOGpiodxnPkb: { tier: 'momento', mode: 'payment' },
+  price_1TFzdtRoyXRpjOGpQTHJGKQ0: { tier: 'classic', mode: 'payment' },
+  price_1TME4QRoyXRpjOGpfiWHhcmB: { tier: 'premium', mode: 'payment' },
+  price_1TFzi0RoyXRpjOGpfO3J11AL: { tier: 'archive', mode: 'subscription' },
 };
 
 export default async function handler(req, res) {

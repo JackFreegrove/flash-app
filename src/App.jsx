@@ -3,18 +3,22 @@ import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from './supabase';
 
 const PRICES = {
-  momento: 'price_1TFzdKRoyXRpjOGpQ1HHI9UM',
+  momento: 'price_1TME3URoyXRpjOGpiodxnPkb',
   classic: 'price_1TFzdtRoyXRpjOGpQTHJGKQ0',
-  premium: 'price_1TFzexRoyXRpjOGpFMusLaZn',
-  venuePartner: 'price_1TFzhARoyXRpjOGp4z6BAswn',
+  premium: 'price_1TME4QRoyXRpjOGpfiWHhcmB',
   archive: 'price_1TFzi0RoyXRpjOGpfO3J11AL',
 };
 
 const TIER_PHOTOS = {
-  momento: 5,
+  momento: 3,
   classic: 5,
-  premium: 8,
-  venuePartner: 10,
+  premium: 10,
+};
+
+const TIER_EXPIRY_DAYS = {
+  momento: 5,
+  classic: 14,
+  premium: 60,
 };
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
@@ -400,38 +404,47 @@ function PricingPage({ onSelect }) {
   };
 
 
-  const tiers = [
-    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '5', life: '7 days', archive: 'Add-on', priceId: PRICES.momento },
-    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '5', life: '14 days', archive: 'Add-on', priceId: PRICES.classic, popular: true },
-    { key: 'premium', label: 'Premium', price: '€169', guests: 'Unlimited', photos: '8', life: '30 days', archive: '1 year free', priceId: PRICES.premium },
-    { key: 'venuePartner', label: 'Venue Partner', price: '€299', guests: 'Unlimited', photos: '10', life: '60 days', archive: '2 years free', priceId: PRICES.venuePartner },
+  const topTiers = [
+    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '3 each', life: '5 days', archive: 'Add-on €15/yr', priceId: PRICES.momento },
+    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '5 each', life: '14 days', archive: 'Add-on €15/yr', priceId: PRICES.classic, popular: true },
   ];
+  const premiumTier = { key: 'premium', label: 'Premium', price: '€199', guests: 'Unlimited', photos: '10 each', life: '60 days', archive: '1 year free', priceId: PRICES.premium, bestValue: true };
+
+  const renderTierCard = (tier, fullWidth) => (
+    <div key={tier.key} className="card" style={{ position: 'relative', border: tier.popular ? `2px solid ${COLORS.accent}` : undefined }}>
+      {tier.popular && (
+        <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', background: COLORS.accent, color: 'white', padding: '2px 14px', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: 2 }}>
+          Most Popular
+        </div>
+      )}
+      {tier.bestValue && (
+        <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', background: COLORS.accent, color: 'white', padding: '2px 14px', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: 2 }}>
+          Best Value
+        </div>
+      )}
+      <div className="card-title">{tier.label}</div>
+      <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: fullWidth ? 44 : 36, marginBottom: 16 }}>{tier.price}</div>
+      <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 20, lineHeight: 2, display: fullWidth ? 'grid' : undefined, gridTemplateColumns: fullWidth ? 'repeat(2, 1fr)' : undefined }}>
+        <div>👥 {tier.guests} guests</div>
+        <div>📷 {tier.photos} photos each</div>
+        <div>⏱ Album live for {tier.life}</div>
+        <div>🗄 Archive: {tier.archive}</div>
+      </div>
+      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
+        {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
+      </button>
+    </div>
+  );
 
   return (
     <div>
       <div className="section-title">Choose your <em>Plan</em></div>
       <div className="section-sub">One payment. No subscription. Cancel anytime.</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 32 }}>
-        {tiers.map(tier => (
-          <div key={tier.key} className="card" style={{ position: 'relative', border: tier.popular ? `2px solid ${COLORS.accent}` : undefined }}>
-            {tier.popular && (
-              <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', background: COLORS.accent, color: 'white', padding: '2px 14px', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: 2 }}>
-                Most Popular
-              </div>
-            )}
-            <div className="card-title">{tier.label}</div>
-            <div style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: 36, marginBottom: 16 }}>{tier.price}</div>
-            <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 20, lineHeight: 2 }}>
-              <div>👥 {tier.guests} guests</div>
-              <div>📷 {tier.photos} photos each</div>
-              <div>⏱ Album live for {tier.life}</div>
-              <div>🗄 Archive: {tier.archive}</div>
-            </div>
-            <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
-              {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
-            </button>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        {topTiers.map(tier => renderTierCard(tier, false))}
+      </div>
+      <div style={{ marginBottom: 32 }}>
+        {renderTierCard(premiumTier, true)}
       </div>
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="card-title">Archive Add-On</div>
@@ -467,9 +480,9 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     const revealDate = new Date(eventDate);
     revealDate.setDate(revealDate.getDate() + 1);
     revealDate.setHours(rh, rm, 0, 0);
-    // expires_at = 14 days after reveal (matches the UI "expires after 2 weeks" setting)
+    const expiryDays = TIER_EXPIRY_DAYS[initialTier] ?? 14;
     const expiresAt = new Date(revealDate);
-    expiresAt.setDate(expiresAt.getDate() + 14);
+    expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
     const id = crypto.randomUUID();
     const { error } = await supabase.from('events').insert({
@@ -486,7 +499,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     });
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
-    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, shotsTaken: [], guests: [] });
+    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, shotsTaken: [], guests: [] });
   };
 
   return (
@@ -510,7 +523,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
           <div className="field">
             <label>Photos per Guest</label>
             <select value={form.photos} onChange={e => set("photos", e.target.value)}>
-              {[5,6,7,8,9,10].filter(n => n <= (initialPhotos ?? 10)).map(n => <option key={n} value={n}>{n} photos</option>)}
+              {[1,2,3,4,5,6,7,8,9,10].filter(n => n <= (initialPhotos ?? 10)).map(n => <option key={n} value={n}>{n} photos</option>)}
             </select>
           </div>
           <div className="field">
@@ -538,8 +551,8 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
         </div>
         <div className="toggle-row">
           <div>
-            <div className="toggle-label">Album expires after 2 weeks</div>
-            <div className="toggle-desc">Photos automatically removed 14 days after reveal</div>
+            <div className="toggle-label">Album expires after {TIER_EXPIRY_DAYS[initialTier] ?? 14} days</div>
+            <div className="toggle-desc">Photos automatically removed {TIER_EXPIRY_DAYS[initialTier] ?? 14} days after reveal</div>
           </div>
           <div className="toggle on" role="switch" aria-checked={true} style={{pointerEvents:"none"}} />
         </div>
@@ -612,7 +625,7 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32}}>
         <div>
           <div className="section-title">{event.name}</div>
-          <div className="section-sub">{event.isPublic ? "Public" : "Private"} · {event.photos} photos/guest · Expires in 14 days</div>
+          <div className="section-sub">{event.isPublic ? "Public" : "Private"} · {event.photos} photos/guest · Expires in {TIER_EXPIRY_DAYS[event.tier] ?? 14} days</div>
         </div>
         <button className="btn btn-outline btn-sm" onClick={onNewEvent}>+ New Event</button>
       </div>
@@ -977,6 +990,7 @@ function rowToEvent(data) {
     photos: data.photos_per_guest,
     revealDate: new Date(data.reveal_time),
     isPublic: data.is_public,
+    tier: data.tier,
     shotsTaken: [],
     guests: [],
   };
