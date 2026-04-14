@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { priceId } = req.body;
+  const { priceId, userId } = req.body;
   const entry = VALID_PRICES[priceId];
   if (!entry) {
     return res.status(400).json({ error: 'Invalid price' });
@@ -29,6 +29,7 @@ export default async function handler(req, res) {
       mode,
       success_url: `${req.headers.origin || 'https://flash-app-gamma.vercel.app'}?success=true&tier=${tier}`,
       cancel_url: `${req.headers.origin || 'https://flash-app-gamma.vercel.app'}?cancelled=true`,
+      metadata: { user_id: userId ?? '', tier },
     });
 
     res.status(200).json({ url: session.url });

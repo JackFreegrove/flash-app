@@ -386,8 +386,7 @@ function PricingPage({ onSelect }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           priceId,
-          tier,
-          mode: priceId === PRICES.archive ? 'subscription' : 'payment',
+          userId: data?.session?.user?.id ?? '',
         }),
       });
       const { url, error } = await response.json();
@@ -991,6 +990,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [initialPhotos, setInitialPhotos] = useState(null);
   const [initialTier, setInitialTier] = useState(null);
+  const [initialEntitlementId, setInitialEntitlementId] = useState(null);
+  const [pricingError, setPricingError] = useState("");
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
 
@@ -1011,14 +1012,28 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("success") === "true") {
-      const tier = params.get("tier");
-      const photos = TIER_PHOTOS[tier] ?? null;
-      setInitialPhotos(photos);
-      setInitialTier(tier ?? null);
+    if (params.get("success") !== "true") return;
+    window.history.replaceState({}, "", window.location.pathname);
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data?.session) { setView("pricing"); return; }
+      const { data: entitlement, error } = await supabase
+        .from('entitlements')
+        .select('id, tier')
+        .eq('user_id', data.session.user.id)
+        .eq('used', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error || !entitlement) {
+        setPricingError("Payment received but could not be verified. Please contact support if this persists.");
+        setView("pricing");
+        return;
+      }
+      setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
+      setInitialTier(entitlement.tier);
+      setInitialEntitlementId(entitlement.id);
       setView("host-create");
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+    });
   }, []);
 
   // Keep viewRef current so the auth callback always sees the latest view value
@@ -1041,7 +1056,16 @@ export default function App() {
     setView("pricing");
   };
 
-  const handleCreate = (ev) => { setEvent(ev); setView("host-dashboard"); };
+  const handleCreate = async (ev) => {
+    setEvent(ev);
+    setView("host-dashboard");
+    if (initialEntitlementId) {
+      await supabase.from('entitlements')
+        .update({ used: true })
+        .eq('id', initialEntitlementId);
+      setInitialEntitlementId(null);
+    }
+  };
   const handleGuestEnter = (id) => { setTakerId(id); setView("guest-camera"); };
 
   const tabs = [
@@ -1088,7 +1112,16 @@ export default function App() {
             <>
               {view === "signup" && <SignUp onLogin={(v) => setView(v === "login" ? "login" : "pricing")} />}
               {view === "login" && <Login onLogin={(v) => v === "signup" ? setView("signup") : setView("pricing")} />}
-              {view === "pricing" && <PricingPage onSelect={(tier) => user ? setView("host-create") : setView("signup")} />}
+              {view === "pricing" && (
+                <>
+                  {pricingError && (
+                    <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 16, textAlign: 'center', letterSpacing: '0.04em' }}>
+                      {pricingError}
+                    </div>
+                  )}
+                  <PricingPage onSelect={(tier) => user ? setView("host-create") : setView("signup")} />
+                </>
+              )}
               {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
               {view === "host-dashboard" && event && (
                 <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
