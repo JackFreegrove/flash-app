@@ -439,7 +439,7 @@ function PricingPage({ onSelect }) {
 
   return (
     <div>
-      <div className="section-title">Choose your <em>Plan</em></div>
+      <div className="section-title">The Moment's <em>Good Enough.</em></div>
       <div className="section-sub">No app. No filters. No retakes. Your <span style={{ fontStyle: 'italic' }}>REAL</span> night. Captured.</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {topTiers.map(tier => renderTierCard(tier, false))}
