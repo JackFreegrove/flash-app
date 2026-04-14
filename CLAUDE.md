@@ -33,20 +33,18 @@ No app download required. The constraints are the product.
 9. ALWAYS make one change at a time — confirm it works before proceeding
 10. ALWAYS match existing code style and naming conventions
 
-## PRICING — NEVER CHANGE
-| Tier          | Price  | Mode           |
-|---------------|--------|----------------|
-| Momento       | €59    | One-off payment|
-| Classic       | €99    | One-off payment|
-| Premium       | €169   | One-off payment|
-| Venue Partner | €299   | One-off payment|
-| Archive add-on| €15/yr | Subscription   |
+## Pricing (never change without instruction)
+Momento €59 (30 guests, 3 photos, 5d album) | Classic €99 (100 guests, 5 photos, 14d album)
+Premium €199 (unlimited, 10 photos, 60d album, 1yr archive free)
+Archive add-on: €15/year | Custom branding: €49/event
+Venue licensing: Partner €1,200/yr | Professional €2,500/yr | Enterprise €4,500/yr
+(Venue licensing is direct sales only — not on the consumer pricing page)
 
 ## PHOTOS PER GUEST (correct values)
-- Momento: 5 photos
+- Momento: 3 photos
 - Classic: 5 photos
-- Premium: 8 photos
-- Venue Partner: 10 photos
+- Premium: 10 photos
+
 
 ## DATABASE SCHEMA
 ```sql
