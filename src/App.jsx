@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from './supabase';
+import termsRaw from '../terms-conditions.txt?raw';
+import privacyRaw from '../privacy-policy.txt?raw';
 
 const PRICES = {
   momento: 'price_1TME3URoyXRpjOGpiodxnPkb',
@@ -267,6 +269,65 @@ const css = `
   .perm-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; margin-bottom: 8px; }
   .perm-sub { font-size: 11px; color: ${COLORS.muted}; line-height: 1.7; margin-bottom: 24px; }
 
+  /* FOOTER */
+  .site-footer {
+    border-top: 1px solid ${COLORS.border};
+    padding: 20px 32px;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: ${COLORS.muted};
+  }
+  .site-footer a {
+    color: ${COLORS.muted};
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .site-footer a:hover { color: ${COLORS.text}; }
+
+  /* LEGAL PAGES */
+  .legal-page { max-width: 720px; margin: 0 auto; padding: 48px 0; }
+  .legal-page h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 36px; font-weight: 300; margin-bottom: 8px;
+  }
+  .legal-page h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 400;
+    margin-top: 32px; margin-bottom: 10px;
+    padding-bottom: 6px; border-bottom: 1px solid ${COLORS.border};
+  }
+  .legal-page h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px; font-weight: 400;
+    margin-top: 20px; margin-bottom: 8px;
+  }
+  .legal-page p { font-size: 13px; line-height: 1.9; margin-bottom: 12px; color: ${COLORS.text}; }
+  .legal-page ul { padding-left: 20px; margin-bottom: 16px; }
+  .legal-page li { font-size: 13px; line-height: 1.8; margin-bottom: 4px; color: ${COLORS.text}; }
+  .legal-page hr { border: none; border-top: 1px solid ${COLORS.border}; margin: 28px 0; }
+  .legal-page .back-link {
+    display: inline-block; margin-bottom: 32px;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: ${COLORS.muted}; cursor: pointer;
+  }
+  .legal-page .back-link:hover { color: ${COLORS.text}; }
+  .legal-updated { font-size: 10px; color: ${COLORS.muted}; letter-spacing: 0.06em; margin-bottom: 40px; text-transform: uppercase; }
+
+  /* TERMS CHECKBOX */
+  .terms-check-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-top: 16px; padding: 14px; background: ${COLORS.surface};
+    border: 1px solid ${COLORS.border}; border-radius: 2px; font-size: 11px;
+    color: ${COLORS.muted}; line-height: 1.6;
+  }
+  .terms-check-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; cursor: pointer; width: 14px; height: 14px; }
+  .terms-check-row a { color: ${COLORS.text}; text-decoration: underline; cursor: pointer; }
+
   @media (max-width: 600px) {
     .main { padding: 32px 16px; }
     .form-row { grid-template-columns: 1fr; }
@@ -375,9 +436,61 @@ function Login({ onLogin }) {
     </div>
   );
 }
-function PricingPage({ onSelect }) {
+// ── Legal page markdown renderer ─────────────────────────────────────────────
+function renderMarkdown(text) {
+  const lines = text.replace(/^\uFEFF/, '').split('\n');
+  const out = [];
+  let listItems = [];
+  let k = 0;
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    out.push(<ul key={k++}>{listItems}</ul>);
+    listItems = [];
+  };
+
+  const inline = (str) =>
+    str.split(/(\*\*[^*]+\*\*)/).map((p, i) =>
+      p.startsWith('**') && p.endsWith('**') ? <strong key={i}>{p.slice(2, -2)}</strong> : p
+    );
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('### ')) { flushList(); out.push(<h3 key={k++}>{t.slice(4)}</h3>); }
+    else if (t.startsWith('## ')) { flushList(); out.push(<h2 key={k++}>{t.slice(3)}</h2>); }
+    else if (t.startsWith('# ')) { flushList(); out.push(<h1 key={k++}>{t.slice(2)}</h1>); }
+    else if (t.startsWith('- ')) { listItems.push(<li key={k++}>{inline(t.slice(2))}</li>); }
+    else if (t === '---') { flushList(); out.push(<hr key={k++} />); }
+    else if (t === '') { flushList(); }
+    else { flushList(); out.push(<p key={k++}>{inline(t)}</p>); }
+  }
+  flushList();
+  return out;
+}
+
+// ── Legal pages ───────────────────────────────────────────────────────────────
+function PrivacyPage({ onBack }) {
+  return (
+    <div className="legal-page">
+      <span className="back-link" onClick={onBack}>← Back</span>
+      {renderMarkdown(privacyRaw)}
+    </div>
+  );
+}
+
+function TermsPage({ onBack }) {
+  return (
+    <div className="legal-page">
+      <span className="back-link" onClick={onBack}>← Back</span>
+      {renderMarkdown(termsRaw)}
+    </div>
+  );
+}
+
+function PricingPage({ onSelect, onNavToTerms }) {
   const [loadingTier, setLoadingTier] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleCheckout = async (priceId, tier) => {
     const { data } = await supabase.auth.getSession();
@@ -431,7 +544,7 @@ function PricingPage({ onSelect }) {
         <div>⏱ Album live for {tier.life}</div>
         <div>🗄 Archive: {tier.archive}</div>
       </div>
-      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
+      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null || !termsAccepted} title={!termsAccepted ? "Please accept the Terms & Conditions to continue" : ""}>
         {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
       </button>
     </div>
@@ -450,9 +563,15 @@ function PricingPage({ onSelect }) {
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="card-title">Archive Add-On</div>
         <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
-        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null}>
+        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null || !termsAccepted} title={!termsAccepted ? "Please accept the Terms & Conditions to continue" : ""}>
           {loadingTier === 'archive' ? "Redirecting…" : "Add Archive — €15/yr"}
         </button>
+      </div>
+      <div className="terms-check-row">
+        <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
+        <label htmlFor="terms-accept">
+          I have read and agree to the <a onClick={onNavToTerms}>Terms &amp; Conditions</a> and acknowledge the <a onClick={onNavToTerms}>Privacy Policy</a>.
+        </label>
       </div>
       {checkoutError && <div style={{ color: COLORS.danger, fontSize: 11, marginTop: 12, textAlign: 'center' }}>{checkoutError}</div>}
     </div>
@@ -1010,6 +1129,13 @@ export default function App() {
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
 
+  // Legal page deep-links
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/privacy') { setView('privacy'); return; }
+    if (path === '/terms') { setView('terms'); return; }
+  }, []);
+
   // Guest deep-link: /event/:id
   useEffect(() => {
     const match = window.location.pathname.match(/^\/event\/([^/]+)$/);
@@ -1134,9 +1260,14 @@ export default function App() {
                       {pricingError}
                     </div>
                   )}
-                  <PricingPage onSelect={(tier) => user ? setView("host-create") : setView("signup")} />
+                  <PricingPage
+                    onSelect={(tier) => user ? setView("host-create") : setView("signup")}
+                    onNavToTerms={() => setView("terms")}
+                  />
                 </>
               )}
+              {view === "privacy" && <PrivacyPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
+              {view === "terms" && <TermsPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
               {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
               {view === "host-dashboard" && event && (
                 <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
@@ -1153,6 +1284,11 @@ export default function App() {
             </>
           )}
         </main>
+        <footer className="site-footer">
+          <a onClick={() => setView("privacy")}>Privacy Policy</a>
+          <span style={{ color: COLORS.border }}>|</span>
+          <a onClick={() => setView("terms")}>Terms &amp; Conditions</a>
+        </footer>
       </div>
     </>
   );
