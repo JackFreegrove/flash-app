@@ -1,5 +1,5 @@
 # Snapshot Co — Project Memory for Claude Code
-# Auto-read at session start. Last updated: April 2026.
+# Auto-read at session start. Last updated: April 2026 (session 2).
 
 ## WHAT THIS PRODUCT IS
 Browser-based SaaS recreating the disposable camera experience at weddings and events.
@@ -134,6 +134,11 @@ STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_A
 - Host View nav fix (April 2026):
   - Host View tab now always navigates logged-in users to host-dashboard
   - HostDashboardEmpty shown when no active event — displays "No Active Event", + New Event button, and Create Demo Event link (admin only)
+- Reliability fixes (April 2026, session 2):
+  - Stripe webhook timing race fixed — success handler polls entitlements every 2s up to 5 attempts (10s total); shows "Verifying payment…" during polling; URL query string held until entitlement confirmed; fallback error prompts refresh or support contact
+  - Host event state restored on page refresh — auth getSession now fetches most recent event (host_id = user.id, created_at desc, limit 1) from Supabase and navigates to host-dashboard; skips on guest URLs, legal pages, Stripe success redirects
+  - rowToEvent maps is_demo so (demo) tag survives page refresh
+  - pricingError cleared automatically when view changes away from "pricing"
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
