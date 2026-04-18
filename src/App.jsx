@@ -1470,6 +1470,7 @@ export default function App() {
   const [pricingError, setPricingError] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
   const [archiveActive, setArchiveActive] = useState(false);
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -1529,18 +1530,29 @@ export default function App() {
     if (params.get("success") !== "true") return;
     const archivePending = params.get("archive") === "pending";
     const archiveConfirmed = params.get("tier") === "archive";
-    window.history.replaceState({}, "", window.location.pathname);
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!data?.session) { setView("pricing"); return; }
-      const { data: entitlement, error } = await supabase
+    setVerifyingPayment(true);
+
+    const poll = async (attempt) => {
+      const { data: authData } = await supabase.auth.getSession();
+      if (!authData?.session) {
+        window.history.replaceState({}, "", window.location.pathname);
+        setVerifyingPayment(false);
+        setView("pricing");
+        return;
+      }
+
+      const { data: entitlement } = await supabase
         .from('entitlements')
         .select('id, tier')
-        .eq('user_id', data.session.user.id)
+        .eq('user_id', authData.session.user.id)
         .eq('used', false)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
       if (archiveConfirmed) {
+        window.history.replaceState({}, "", window.location.pathname);
+        setVerifyingPayment(false);
         setArchiveActive(true);
         if (entitlement) {
           setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
@@ -1556,16 +1568,28 @@ export default function App() {
         setView("host-create");
         return;
       }
-      if (error || !entitlement) {
-        setPricingError("Payment received but could not be verified. Please contact support if this persists.");
-        setView("pricing");
+
+      if (entitlement) {
+        window.history.replaceState({}, "", window.location.pathname);
+        setVerifyingPayment(false);
+        setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
+        setInitialTier(entitlement.tier);
+        if (archivePending) setPendingArchiveUpsell(true);
+        setView("host-create");
         return;
       }
-      setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
-      setInitialTier(entitlement.tier);
-      if (archivePending) setPendingArchiveUpsell(true);
-      setView("host-create");
-    });
+
+      if (attempt < 5) {
+        setTimeout(() => poll(attempt + 1), 2000);
+      } else {
+        window.history.replaceState({}, "", window.location.pathname);
+        setVerifyingPayment(false);
+        setPricingError("Payment received — it may take a moment to verify. Please refresh the page or contact support.");
+        setView("pricing");
+      }
+    };
+
+    poll(1);
   }, []);
 
   // Keep viewRef current so the auth callback always sees the latest view value
@@ -1669,7 +1693,11 @@ export default function App() {
         </nav>
 
         <main className="main">
-          {loadingEvent ? (
+          {verifyingPayment ? (
+            <div style={{ textAlign: "center", padding: "80px 20px", color: COLORS.muted, fontSize: 12, letterSpacing: "0.06em" }}>
+              Verifying payment…
+            </div>
+          ) : loadingEvent ? (
             <div style={{ textAlign: "center", padding: "80px 20px", color: COLORS.muted, fontSize: 12, letterSpacing: "0.06em" }}>
               Loading event…
             </div>
