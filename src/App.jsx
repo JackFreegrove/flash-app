@@ -492,9 +492,10 @@ function PricingPage({ onSelect, onNavToTerms }) {
   const [checkoutError, setCheckoutError] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsPrompt, setShowTermsPrompt] = useState(false);
+  const [archiveChecked, setArchiveChecked] = useState({ momento: false, classic: false });
   const termsRef = useRef(null);
 
-  const handleCheckout = async (priceId, tier) => {
+  const handleCheckout = async (priceId, tier, withArchive = false) => {
     if (!termsAccepted) {
       // Option A: highlight checkbox and show inline message.
       // To switch to Option C (modal), replace these two lines with: setShowTermsPrompt(true); return;
@@ -513,6 +514,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
         body: JSON.stringify({
           priceId,
           userId: data?.session?.user?.id ?? '',
+          withArchive: withArchive ?? false,
         }),
       });
       const { url, error } = await response.json();
@@ -557,7 +559,17 @@ function PricingPage({ onSelect, onNavToTerms }) {
         <div>⏱ Album live for {tier.life}</div>
         <div>🗄 Archive: {tier.archive}</div>
       </div>
-      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
+      {tier.key !== 'premium' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: COLORS.muted, marginBottom: 12, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={archiveChecked[tier.key]}
+            onChange={e => setArchiveChecked(prev => ({ ...prev, [tier.key]: e.target.checked }))}
+          />
+          Add Archive — €15/yr
+        </label>
+      )}
+      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key, archiveChecked[tier.key] ?? false)} disabled={loadingTier !== null}>
         {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
       </button>
     </div>
@@ -593,13 +605,6 @@ function PricingPage({ onSelect, onNavToTerms }) {
       </div>
       <div style={{ marginBottom: 32 }}>
         {renderTierCard(premiumTier, true)}
-      </div>
-      <div className="card" style={{ textAlign: 'center' }}>
-        <div className="card-title">Archive Add-On</div>
-        <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
-        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null}>
-          {loadingTier === 'archive' ? "Redirecting…" : "Add Archive — €15/yr"}
-        </button>
       </div>
       {checkoutError && <div style={{ color: COLORS.danger, fontSize: 11, marginTop: 12, textAlign: 'center' }}>{checkoutError}</div>}
     </div>
@@ -1444,6 +1449,7 @@ export default function App() {
   const [initialTier, setInitialTier] = useState(null);
   const [initialEntitlementId, setInitialEntitlementId] = useState(null);
   const [pricingError, setPricingError] = useState("");
+  const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -1499,6 +1505,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") !== "true") return;
+    const archivePending = params.get("archive") === "pending";
     window.history.replaceState({}, "", window.location.pathname);
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data?.session) { setView("pricing"); return; }
@@ -1518,6 +1525,7 @@ export default function App() {
       setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
       setInitialTier(entitlement.tier);
       setInitialEntitlementId(entitlement.id);
+      if (archivePending) setPendingArchiveUpsell(true);
       setView("host-create");
     });
   }, []);
@@ -1577,6 +1585,23 @@ export default function App() {
     setView('host-dashboard');
   };
   const handleApprove = (approvedAt) => { setEvent(e => ({ ...e, approvedAt })); };
+
+  const handleArchiveCheckout = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data?.session) return;
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceId: PRICES.archive, userId: data.session.user.id, withArchive: false }),
+      });
+      const { url, error } = await response.json();
+      if (error) throw new Error(error);
+      window.location.href = url;
+    } catch (err) {
+      console.error('Archive checkout error:', err);
+    }
+  };
   const handleGuestEnter = (name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); };
 
   const tabs = [
@@ -1638,7 +1663,31 @@ export default function App() {
               )}
               {view === "privacy" && <PrivacyPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
               {view === "terms" && <TermsPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
-              {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
+              {view === "host-create" && (
+                <>
+                  {pendingArchiveUpsell && (
+                    <div className="card" style={{ marginBottom: 16, borderLeft: `3px solid ${COLORS.accent}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                        <div>
+                          <div className="card-title" style={{ marginBottom: 4 }}>Add Archive — €15/yr</div>
+                          <div style={{ fontSize: 11, color: COLORS.muted }}>Keep your album forever. Cancel anytime.</div>
+                        </div>
+                        <button
+                          className="btn btn-outline"
+                          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                          onClick={handleArchiveCheckout}
+                        >
+                          Add Archive →
+                        </button>
+                      </div>
+                      <div style={{ marginTop: 10, textAlign: 'right' }}>
+                        <a style={{ fontSize: 11, color: COLORS.muted, cursor: 'pointer' }} onClick={() => setPendingArchiveUpsell(false)}>No thanks</a>
+                      </div>
+                    </div>
+                  )}
+                  <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />
+                </>
+              )}
               {view === "host-dashboard" && (
                 event
                   ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
