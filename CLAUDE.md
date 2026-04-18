@@ -98,17 +98,24 @@ STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_A
   - Momento subtitle: "Ideal for hens, stags & small parties"
   - Album expiry is now tier-aware (5 / 14 / 60 days)
   - Stripe whitelist in api/create-checkout-session.js updated to match
+- Privacy Policy + T&Cs page (/legal route)
+- Guest session persistence (April 2026):
+  - guest_sessions table with device fingerprint (localStorage UUID + event_id)
+  - Returning guests blocked if completed, resumed with correct shot counter if incomplete
+  - Session writes photos_taken + completed=true to Supabase on each upload
+  - Email capture on done screen for public events
+  - Host dashboard guest count reads guest_sessions rows
+  - T&C checkbox moved above pricing cards — gates all Book Now buttons
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
-2. Switch Stripe test → live mode (only after tasks 1 complete)
-3. Privacy Policy + T&Cs page (/legal route)
-4. Intermittent event creation bug — investigate and fix (sometimes fails on Supabase insert during event creation / QR generation)
-5. Album sort/filter feature (chronological vs grouped by taker)
-6. Album view UI refinement + merchandise CTA placeholder at reveal
-7. Transactional email sequence via Resend (6 emails — see business plan)
-8. hello@eventsnapshotco.com setup (after domain connected)
-9. Landing page (after domain connected and Stripe live)
+2. Switch Stripe test → live mode (only after task 1 complete)
+3. Intermittent event creation bug — investigate and fix (sometimes fails on Supabase insert during event creation / QR generation)
+4. Album sort/filter feature (chronological vs grouped by taker)
+5. Album view UI refinement + merchandise CTA placeholder at reveal
+6. Transactional email sequence via Resend (6 emails — see business plan)
+7. hello@eventsnapshotco.com setup (after domain connected)
+8. Landing page (after domain connected and Stripe live)
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
