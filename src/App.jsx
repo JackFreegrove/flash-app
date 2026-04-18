@@ -1336,7 +1336,7 @@ function rowToEvent(data) {
 }
 
 // ── GUEST: Album View ─────────────────────────────────────────────────────────
-function GuestAlbumView({ event, guestName }) {
+function GuestAlbumView({ event, guestName, guestEmail }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
@@ -1364,7 +1364,12 @@ function GuestAlbumView({ event, guestName }) {
     <div>
       <div style={{ marginBottom: 32 }}>
         {guestName && (
-          <div className="guest-sub" style={{ marginBottom: 8 }}>Welcome back, {guestName}</div>
+          <div className="guest-sub" style={{ marginBottom: 4 }}>Welcome back, {guestName}</div>
+        )}
+        {guestEmail && (
+          <div style={{ fontSize: 10, color: COLORS.muted, letterSpacing: '0.04em', marginBottom: 8 }}>
+            You'll receive album updates at {guestEmail}
+          </div>
         )}
         <div className="section-title">{event.name}</div>
         <div className="guest-sub">
@@ -1415,6 +1420,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null);
   const [initialShots, setInitialShots] = useState(0);
   const [guestName, setGuestName] = useState(null);
+  const [guestEmail, setGuestEmail] = useState(null);
 
   // Legal page deep-links
   useEffect(() => {
@@ -1446,11 +1452,14 @@ export default function App() {
           const fingerprint = `${ev.id}|${deviceId}`;
           const { data: session } = await supabase
             .from('guest_sessions')
-            .select('completed, taker_name')
+            .select('completed, taker_name, email')
             .eq('event_id', ev.id)
             .eq('device_fingerprint', fingerprint)
             .maybeSingle();
-          if (session?.completed) setGuestName(session.taker_name);
+          if (session?.completed) {
+            setGuestName(session.taker_name);
+            if (session.email) setGuestEmail(session.email);
+          }
           setView(!session || session.completed ? "guest-album" : "guest-entry");
           return;
         }
@@ -1596,7 +1605,7 @@ export default function App() {
                 </div>
               )}
               {view === "guest-album" && event && (
-                <GuestAlbumView event={event} guestName={guestName} />
+                <GuestAlbumView event={event} guestName={guestName} guestEmail={guestEmail} />
               )}
               {view === "guest-entry" && event && (
                 <GuestEntry event={event} onEnter={handleGuestEnter} />
