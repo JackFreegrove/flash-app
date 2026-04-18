@@ -611,7 +611,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
   );
 }
 // ── HOST: Create Event ────────────────────────────────────────────────────────
-function CreateEvent({ onCreate, initialPhotos, initialTier }) {
+function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive }) {
   const [form, setForm] = useState({
     name: "",
     date: "",
@@ -659,6 +659,11 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     <div>
       <div className="section-title">Create <em>Event</em></div>
       <div className="section-sub">Set up your disposable camera album</div>
+      {archiveActive && (
+        <div style={{ fontSize: 11, color: '#5a9e6f', letterSpacing: '0.04em', marginBottom: 16 }}>
+          ✓ Archive active — this album will be kept permanently.
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title">Event Details</div>
@@ -702,13 +707,23 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
             onKeyDown={e => (e.key === ' ' || e.key === 'Enter') && set("isPublic", !form.isPublic)}
           />
         </div>
-        <div className="toggle-row">
-          <div>
-            <div className="toggle-label">Album expires after {TIER_EXPIRY_DAYS[initialTier] ?? 14} days</div>
-            <div className="toggle-desc">Photos automatically removed {TIER_EXPIRY_DAYS[initialTier] ?? 14} days after reveal</div>
+        {archiveActive ? (
+          <div className="toggle-row">
+            <div>
+              <div className="toggle-label" style={{ color: '#5a9e6f' }}>Album kept permanently with Archive</div>
+              <div className="toggle-desc">Your photos will never be automatically removed</div>
+            </div>
+            <div className="toggle on" role="switch" aria-checked={true} style={{pointerEvents:"none"}} />
           </div>
-          <div className="toggle on" role="switch" aria-checked={true} style={{pointerEvents:"none"}} />
-        </div>
+        ) : (
+          <div className="toggle-row">
+            <div>
+              <div className="toggle-label">Album expires after {TIER_EXPIRY_DAYS[initialTier] ?? 14} days</div>
+              <div className="toggle-desc">Photos automatically removed {TIER_EXPIRY_DAYS[initialTier] ?? 14} days after reveal</div>
+            </div>
+            <div className="toggle on" role="switch" aria-checked={true} style={{pointerEvents:"none"}} />
+          </div>
+        )}
       </div>
 
       {saveError && <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 12 }}>{saveError}</div>}
@@ -1288,6 +1303,7 @@ function GuestEntry({ event, onEnter }) {
       .select('id')
       .single();
     if (insertError) {
+      console.error('guest_sessions insert error:', insertError);
       setEntryError("Could not start session. Please try again.");
       setStarting(false);
       return;
@@ -1450,6 +1466,7 @@ export default function App() {
   const [initialEntitlementId, setInitialEntitlementId] = useState(null);
   const [pricingError, setPricingError] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
+  const [archiveActive, setArchiveActive] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -1506,6 +1523,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") !== "true") return;
     const archivePending = params.get("archive") === "pending";
+    const archiveConfirmed = params.get("tier") === "archive";
     window.history.replaceState({}, "", window.location.pathname);
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data?.session) { setView("pricing"); return; }
@@ -1517,6 +1535,23 @@ export default function App() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (archiveConfirmed) {
+        setArchiveActive(true);
+        if (entitlement) {
+          setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
+          setInitialTier(entitlement.tier);
+          setInitialEntitlementId(entitlement.id);
+        } else {
+          const savedTier = sessionStorage.getItem('archiveReturnTier');
+          const savedPhotos = sessionStorage.getItem('archiveReturnPhotos');
+          if (savedTier) setInitialTier(savedTier);
+          if (savedPhotos) setInitialPhotos(Number(savedPhotos) || null);
+        }
+        sessionStorage.removeItem('archiveReturnTier');
+        sessionStorage.removeItem('archiveReturnPhotos');
+        setView("host-create");
+        return;
+      }
       if (error || !entitlement) {
         setPricingError("Payment received but could not be verified. Please contact support if this persists.");
         setView("pricing");
@@ -1597,6 +1632,8 @@ export default function App() {
       });
       const { url, error } = await response.json();
       if (error) throw new Error(error);
+      sessionStorage.setItem('archiveReturnTier', initialTier ?? '');
+      sessionStorage.setItem('archiveReturnPhotos', String(initialPhotos ?? ''));
       window.location.href = url;
     } catch (err) {
       console.error('Archive checkout error:', err);
@@ -1685,7 +1722,7 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />
+                  <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} archiveActive={archiveActive} />
                 </>
               )}
               {view === "host-dashboard" && (
