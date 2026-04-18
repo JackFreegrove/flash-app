@@ -54,7 +54,8 @@ Venue licensing (direct sales only — NOT on consumer pricing page):
 ## DATABASE SCHEMA
 ```sql
 events (id UUID PK, host_id UUID, name TEXT, event_date DATE, reveal_time TIMESTAMPTZ,
-        photos_per_guest INT, max_guests INT, is_public BOOL, tier TEXT, created_at TIMESTAMPTZ)
+        photos_per_guest INT, max_guests INT, is_public BOOL, tier TEXT, created_at TIMESTAMPTZ,
+        approved_at TIMESTAMPTZ nullable)
 guests (id UUID PK, event_id UUID FK, name TEXT, photos_taken INT DEFAULT 0, joined_at TIMESTAMPTZ)
 photos (id UUID PK, event_id UUID FK, guest_id UUID FK, storage_path TEXT, taken_at TIMESTAMPTZ)
 ```
@@ -106,6 +107,20 @@ STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_A
   - Email capture on done screen for public events
   - Host dashboard guest count reads guest_sessions rows
   - T&C checkbox moved above pricing cards — gates all Book Now buttons
+- Host approval gate for public albums (April 2026):
+  - approved_at TIMESTAMPTZ column added to events table (nullable, default null)
+  - Public albums require host approval before guests can view them
+  - Post-reveal, unapproved: guests see "hosts are reviewing" waiting screen
+  - Host dashboard shows "Awaiting Your Approval" prompt after reveal
+  - AlbumView shows red approval banner; host reviews photos then approves in one click
+  - Approval writes approved_at to Supabase and propagates to App state immediately
+- Guest-facing album view — GuestAlbumView (April 2026):
+  - Public approved albums routed to GuestAlbumView instead of GuestEntry
+  - Routing checks device fingerprint: completed/no session → album, incomplete → finish shots first
+  - Read-only 3-column photo grid matching host AlbumView styling
+  - Event name header, event date in guest-sub style, "Captured with Snapshot Co." footer
+  - Returning guests with completed session see "Welcome back, [name]"
+  - Guests who provided email see "You'll receive album updates at [email]"
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
