@@ -1389,6 +1389,11 @@ function GuestAlbumView({ event }) {
           ))}
         </div>
       )}
+      {!loading && !fetchError && (
+        <div style={{ textAlign: "center", marginTop: 48, fontSize: 10, color: COLORS.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Captured with Snapshot Co.
+        </div>
+      )}
     </div>
   );
 }
