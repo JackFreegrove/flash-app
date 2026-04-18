@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from './supabase';
 import termsRaw from '../terms-conditions.txt?raw';
@@ -48,6 +48,7 @@ const STORAGE_KEYS = {
 const QR_CANVAS_SIZE = 400;
 const VIDEO_FALLBACK = { width: 400, height: 533 }; // 3:4 fallback when camera hasn't reported dimensions
 const JPEG_QUALITY = 0.85;
+const MAX_PHOTO_DIMENSION = 1200; // long-edge cap before upload — keeps files ~80–150 KB
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GUEST_NAME_MAX_LEN = 60;
 const ADMIN_EMAIL = 'eventsnapshotco@gmail.com';
@@ -58,6 +59,11 @@ const DEMO_EVENT = {
   tier: 'classic',
   reveal_hours: 1,
 };
+
+const NAV_TABS = [
+  { id: "host", label: "Host View" },
+  { id: "guest", label: "Guest View" },
+];
 
 // taker_name in the photos table stores a guest display name string (e.g. "Uncle Dave"),
 // mirroring guest_sessions.taker_name. It is not a foreign key ID.
@@ -508,19 +514,21 @@ function renderMarkdown(text) {
 
 // ── Legal pages ───────────────────────────────────────────────────────────────
 function PrivacyPage({ onBack }) {
+  const content = useMemo(() => renderMarkdown(privacyRaw), []);
   return (
     <div className="legal-page">
       <span className="back-link" onClick={onBack}>← Back</span>
-      {renderMarkdown(privacyRaw)}
+      {content}
     </div>
   );
 }
 
 function TermsPage({ onBack }) {
+  const content = useMemo(() => renderMarkdown(termsRaw), []);
   return (
     <div className="legal-page">
       <span className="back-link" onClick={onBack}>← Back</span>
-      {renderMarkdown(termsRaw)}
+      {content}
     </div>
   );
 }
@@ -836,10 +844,14 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
       ctx.fillRect(0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
       ctx.drawImage(img, 0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
       URL.revokeObjectURL(url);
-      const a = document.createElement('a');
-      a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
-      a.href = canvas.toDataURL('image/png');
-      a.click();
+      canvas.toBlob(pngBlob => {
+        const blobUrl = URL.createObjectURL(pngBlob);
+        const a = document.createElement('a');
+        a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
+        a.href = blobUrl;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      });
     };
     img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
@@ -951,6 +963,7 @@ function AlbumView({ event, onBack, onApprove }) {
       .select('id, taker_name, storage_path, created_at')
       .eq('event_id', event.id)
       .order('created_at', { ascending: true })
+      .limit(500)
       .then(({ data, error }) => {
         if (error) {
           setFetchError("Failed to load photos. Please refresh.");
@@ -1094,11 +1107,17 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const shotsRef = useRef([]);
   const [facingMode, setFacingMode] = useState("environment");
   const [permDenied, setPermDenied] = useState(false);
   const [shots, setShots] = useState(() =>
     Array.from({ length: initialShots }, () => ({ url: null, taker: takerId, time: 0 }))
   );
+  // Keep shotsRef current so the unmount cleanup can revoke blob URLs
+  useEffect(() => { shotsRef.current = shots; }, [shots]);
+  useEffect(() => {
+    return () => { shotsRef.current.forEach(s => { if (s.url?.startsWith('blob:')) URL.revokeObjectURL(s.url); }); };
+  }, []);
   const [flashing, setFlashing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -1151,17 +1170,32 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     }
     ctx.drawImage(v, 0, 0);
 
-    // Convert canvas to blob and upload
-    c.toBlob(async (blob) => {
+    // Resize down to MAX_PHOTO_DIMENSION on the long edge before encoding
+    let source = c;
+    if (c.width > MAX_PHOTO_DIMENSION || c.height > MAX_PHOTO_DIMENSION) {
+      const scale = MAX_PHOTO_DIMENSION / Math.max(c.width, c.height);
+      const r = document.createElement('canvas');
+      r.width = Math.round(c.width * scale);
+      r.height = Math.round(c.height * scale);
+      r.getContext('2d').drawImage(c, 0, 0, r.width, r.height);
+      source = r;
+    }
+
+    source.toBlob(async (blob) => {
       if (!blob) return;
       setUploading(true);
       const folderName = `${sanitiseName(event.name)} [${event.id.slice(0, 8)}]`;
       const fileName = `${sanitiseName(takerId)} ${shots.length + 1}.jpg`;
       const path = `${folderName}/${fileName}`;
-      const { error: uploadError } = await supabase.storage
+      let { error: uploadError } = await supabase.storage
         .from('photos')
         .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-
+      if (uploadError) {
+        await new Promise(r => setTimeout(r, 1000));
+        ({ error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: true }));
+      }
       if (uploadError) {
         setUploading(false);
         setShotError("Upload failed. Tap the shutter to try again.");
@@ -1179,7 +1213,8 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
         return;
       }
 
-      const url = c.toDataURL("image/jpeg", JPEG_QUALITY);
+      // createObjectURL avoids the blocking toDataURL re-encode; revoked on unmount
+      const url = URL.createObjectURL(blob);
       const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
       setShots(newShots);
       const isComplete = newShots.length >= maxShots;
@@ -1200,6 +1235,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
         setTimeout(() => setDone(true), TIMINGS.DONE_DELAY_MS);
       }
     }, 'image/jpeg', JPEG_QUALITY);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id]);
 
   if (done) {
@@ -1241,7 +1277,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       </div>
 
       <div className="steps">
-        {Array.from({ length: maxShots }).map((_, i) => (
+        {useMemo(() => Array.from({ length: maxShots }), [maxShots]).map((_, i) => (
           <div key={i} className={`step ${i < shots.length ? "done" : ""}`} />
         ))}
       </div>
@@ -1284,7 +1320,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       </div>
 
       <div className="film-strip">
-        {Array.from({ length: maxShots }).map((_, i) => (
+        {useMemo(() => Array.from({ length: maxShots }), [maxShots]).map((_, i) => (
           <div key={i} className={`film-thumb ${i >= shots.length ? "film-thumb-empty" : ""}`}>
             {shots[i] ? <img src={shots[i].url} alt="" /> : null}
             <div className="film-thumb-num">{i + 1}</div>
@@ -1320,17 +1356,19 @@ function GuestEntry({ event, onEnter }) {
   };
 
   useEffect(() => {
+    let active = true;
     setSessionStatus(null);
     setSessionError(false);
     const deviceId = getDeviceId();
     const fingerprint = `${event.id}|${deviceId}`;
     supabase
       .from('guest_sessions')
-      .select('*')
+      .select('id, completed, taker_name, photos_taken')
       .eq('event_id', event.id)
       .eq('device_fingerprint', fingerprint)
       .maybeSingle()
       .then(async ({ data, error: err }) => {
+        if (!active) return;
         if (err || !data) { setSessionStatus('none'); return; }
         if (data.completed) { setSessionStatus('blocked'); return; }
         const { data: photoRows } = await supabase
@@ -1338,17 +1376,19 @@ function GuestEntry({ event, onEnter }) {
           .select('id')
           .eq('event_id', event.id)
           .eq('taker_name', data.taker_name);
+        if (!active) return;
         const count = photoRows?.length ?? data.photos_taken;
         if (count >= event.photos) {
           await supabase.from('guest_sessions').update({ completed: true, photos_taken: count }).eq('id', data.id);
-          setSessionStatus('blocked');
+          if (active) setSessionStatus('blocked');
           return;
         }
         onEnter(data.taker_name, data.id, count);
       })
       .catch(() => {
-        setSessionError(true);
+        if (active) setSessionError(true);
       });
+    return () => { active = false; };
   }, [event.id, retryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpen = async () => {
@@ -1477,6 +1517,7 @@ function GuestAlbumView({ event, guestName, guestEmail }) {
       .select('id, taker_name, storage_path, created_at')
       .eq('event_id', event.id)
       .order('created_at', { ascending: true })
+      .limit(500)
       .then(({ data, error }) => {
         if (error) {
           setFetchError("Failed to load photos. Please refresh.");
@@ -1569,7 +1610,7 @@ export default function App() {
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidPattern.test(eventId)) { setEventNotFound(true); return; }
     setLoadingEvent(true);
-    supabase.from('events').select('*').eq('id', eventId).single()
+    supabase.from('events').select('id, name, date, photos_per_guest, reveal_time, is_public, tier, approved_at, is_demo').eq('id', eventId).single()
       .then(async ({ data, error }) => {
         setLoadingEvent(false);
         if (error || !data) { setEventNotFound(true); return; }
@@ -1656,7 +1697,8 @@ export default function App() {
       }
 
       if (attempt < TIMINGS.PAYMENT_POLL_MAX) {
-        setTimeout(() => poll(attempt + 1), TIMINGS.PAYMENT_POLL_MS);
+        const delay = Math.min(TIMINGS.PAYMENT_POLL_MS * attempt, 10000);
+        setTimeout(() => poll(attempt + 1), delay);
       } else {
         window.history.replaceState({}, "", window.location.pathname);
         setVerifyingPayment(false);
@@ -1673,7 +1715,9 @@ export default function App() {
   useEffect(() => { if (view !== "pricing") setPricingError(""); }, [view]);
 
   useEffect(() => {
+    let active = true;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!active) return;
       setUser(session?.user ?? null);
       if (!session?.user) return;
 
@@ -1686,12 +1730,13 @@ export default function App() {
 
       const { data: row } = await supabase
         .from('events')
-        .select('*')
+        .select('id, name, date, photos_per_guest, reveal_time, is_public, tier, approved_at, is_demo')
         .eq('host_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      if (!active) return;
       if (row) setEvent(rowToEvent(row));
       setView('host-dashboard');
     });
@@ -1699,7 +1744,7 @@ export default function App() {
       setUser(session?.user ?? null);
       if (session?.user && viewRef.current === "login") setView("pricing");
     });
-    return () => subscription.unsubscribe();
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
   const handleSignOut = async () => {
@@ -1708,10 +1753,10 @@ export default function App() {
     setView("pricing");
   };
 
-  const handleCreate = (ev) => {
+  const handleCreate = useCallback((ev) => {
     setEvent(ev);
     setView("host-dashboard");
-  };
+  }, []);
   const handleCreateDemo = async () => {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
@@ -1737,7 +1782,7 @@ export default function App() {
     setEvent({ id, name: DEMO_EVENT.name, date: today, photos: DEMO_EVENT.photos_per_guest, revealDate, isPublic: true, isDemo: true, tier: DEMO_EVENT.tier, approvedAt: null, shotsTaken: [], guests: [] });
     setView('host-dashboard');
   };
-  const handleApprove = (approvedAt) => { setEvent(e => ({ ...e, approvedAt })); };
+  const handleApprove = useCallback((approvedAt) => { setEvent(e => ({ ...e, approvedAt })); }, []);
 
   const handleArchiveCheckout = async () => {
     const { data } = await supabase.auth.getSession();
@@ -1757,18 +1802,14 @@ export default function App() {
       console.error('Archive checkout error:', err);
     }
   };
-  const handleGuestEnter = (name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); };
+  const handleGuestEnter = useCallback((name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); }, []);
 
-  const tabs = [
-    { id: "host", label: "Host View" },
-    { id: "guest", label: "Guest View" },
-  ];
   const activeTab = view === "guest-entry" || view === "guest-camera" ? "guest" : "host";
 
-  const switchTab = (tab) => {
+  const switchTab = useCallback((tab) => {
     if (tab === "host") setView(user ? "host-dashboard" : "pricing");
     else if (event) setView("guest-entry");
-  };
+  }, [user, event]);
 
   return (
     <>
@@ -1777,7 +1818,7 @@ export default function App() {
         <nav className="nav">
           <img src="/logo.svg" alt="Snapshot Co" style={{height: '40px'}} />
           <div className="nav-tabs">
-            {tabs.map(t => (
+            {NAV_TABS.map(t => (
               <button key={t.id} className={`nav-tab ${activeTab === t.id ? "active" : ""}`} onClick={() => switchTab(t.id)}>
                 {t.label}
               </button>
