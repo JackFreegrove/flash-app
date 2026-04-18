@@ -1595,6 +1595,7 @@ export default function App() {
 
   // Keep viewRef current so the auth callback always sees the latest view value
   useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => { if (view !== "pricing") setPricingError(""); }, [view]);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
