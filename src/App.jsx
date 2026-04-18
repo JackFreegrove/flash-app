@@ -647,7 +647,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
     });
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
-    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, shotsTaken: [], guests: [] });
+    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null, shotsTaken: [], guests: [] });
   };
 
   return (
@@ -797,8 +797,21 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
       <div className="card" style={{textAlign:"center"}}>
         {revealed ? (
           <>
-            <div className="card-title">Album Ready</div>
-            <button className="btn btn-gold" onClick={onViewAlbum}>View Album →</button>
+            {event.isPublic && !event.approvedAt ? (
+              <>
+                <div className="card-title" style={{color: COLORS.danger}}>Awaiting Your Approval</div>
+                <div style={{fontSize:11, color:COLORS.muted, marginBottom:16}}>Review the album before it goes live to guests.</div>
+                <button className="btn btn-gold" onClick={onViewAlbum}>Review &amp; Approve →</button>
+              </>
+            ) : (
+              <>
+                <div className="card-title">{event.isPublic ? 'Album Live' : 'Album Ready'}</div>
+                {event.isPublic && event.approvedAt && (
+                  <div style={{fontSize:10, color:COLORS.success, letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:12}}>Approved · Live to guests</div>
+                )}
+                <button className="btn btn-gold" onClick={onViewAlbum}>View Album →</button>
+              </>
+            )}
           </>
         ) : (
           <>
@@ -819,11 +832,25 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
 }
 
 // ── HOST: Album View ──────────────────────────────────────────────────────────
-function AlbumView({ event, onBack }) {
+function AlbumView({ event, onBack, onApprove }) {
   const { remaining, display } = useCountdown(event.revealDate?.getTime() || 0);
   const revealed = remaining === 0;
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [localApprovedAt, setLocalApprovedAt] = useState(event.approvedAt);
+
+  const handleApprove = async () => {
+    setApproving(true);
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('events').update({ approved_at: now }).eq('id', event.id);
+    if (!error) {
+      const approvedAt = new Date(now);
+      setLocalApprovedAt(approvedAt);
+      onApprove?.(approvedAt);
+    }
+    setApproving(false);
+  };
   const [fetchError, setFetchError] = useState("");
 
   useEffect(() => {
@@ -881,6 +908,26 @@ function AlbumView({ event, onBack }) {
         </div>
       </div>
 
+      {event.isPublic && !localApprovedAt && (
+        <div style={{
+          display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12,
+          padding:'16px 20px', marginBottom:24,
+          border:`1px solid ${COLORS.danger}`, borderRadius:2, background:'#FFF5F5',
+        }}>
+          <div>
+            <div style={{fontSize:11, fontWeight:500, color:COLORS.danger, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>Pending Approval</div>
+            <div style={{fontSize:11, color:COLORS.muted}}>Guests cannot see this album until you approve it.</div>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={handleApprove} disabled={approving}>
+            {approving ? 'Approving…' : 'Approve for Guests →'}
+          </button>
+        </div>
+      )}
+      {event.isPublic && localApprovedAt && (
+        <div style={{fontSize:10, color:COLORS.success, letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:20}}>
+          ✓ Approved · Live to guests
+        </div>
+      )}
       {loading ? (
         <div style={{textAlign:"center",padding:"60px 20px",color:COLORS.muted,fontSize:12,letterSpacing:"0.06em"}}>Loading photos…</div>
       ) : fetchError ? (
@@ -1282,6 +1329,7 @@ function rowToEvent(data) {
     revealDate: new Date(data.reveal_time),
     isPublic: data.is_public,
     tier: data.tier,
+    approvedAt: data.approved_at ? new Date(data.approved_at) : null,
     shotsTaken: [],
     guests: [],
   };
@@ -1319,8 +1367,14 @@ export default function App() {
       .then(({ data, error }) => {
         setLoadingEvent(false);
         if (error || !data) { setEventNotFound(true); return; }
-        setEvent(rowToEvent(data));
-        setView("guest-entry");
+        const ev = rowToEvent(data);
+        setEvent(ev);
+        const isRevealed = Date.now() > ev.revealDate.getTime();
+        if (isRevealed && ev.isPublic && !ev.approvedAt) {
+          setView("guest-album-pending");
+        } else {
+          setView("guest-entry");
+        }
       });
   }, []);
 
@@ -1380,6 +1434,7 @@ export default function App() {
       setInitialEntitlementId(null);
     }
   };
+  const handleApprove = (approvedAt) => { setEvent(e => ({ ...e, approvedAt })); };
   const handleGuestEnter = (name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); };
 
   const tabs = [
@@ -1446,7 +1501,19 @@ export default function App() {
                 <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
               )}
               {view === "host-album" && event && (
-                <AlbumView event={event} onBack={() => setView("host-dashboard")} />
+                <AlbumView event={event} onBack={() => setView("host-dashboard")} onApprove={handleApprove} />
+              )}
+              {view === "guest-album-pending" && event && (
+                <div className="guest-wrap">
+                  <div className="done-wrap">
+                    <div style={{ fontSize: 56, marginBottom: 20 }}>🎞️</div>
+                    <div className="done-title">Almost ready.</div>
+                    <div className="done-sub">
+                      The hosts are reviewing the album.<br />
+                      You'll receive an email when it's ready to view.
+                    </div>
+                  </div>
+                </div>
               )}
               {view === "guest-entry" && event && (
                 <GuestEntry event={event} onEnter={handleGuestEnter} />
