@@ -121,6 +121,19 @@ STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_A
   - Event name header, event date in guest-sub style, "Captured with Snapshot Co." footer
   - Returning guests with completed session see "Welcome back, [name]"
   - Guests who provided email see "You'll receive album updates at [email]"
+- Storage path naming (April 2026):
+  - Folder: sanitised event name + first 8 chars of event UUID in brackets, e.g. "Sarah James Wedding [a3f8b2c1]"
+  - Filename: sanitised taker name + sequential shot number, e.g. "Uncle Dave 3.jpg"
+  - Sanitiser strips all chars except a-z A-Z 0-9 space hyphen underscore
+- Demo event flow (April 2026):
+  - is_demo BOOLEAN column added to events table (NOT NULL DEFAULT false)
+  - Create Demo Event button visible only when logged in as eventsnapshotco@gmail.com
+  - Button appears on both HostDashboard header and HostDashboardEmpty
+  - Creates event with name "Demo Event", today's date, 5 photos, reveal in 1 hour, is_public true, tier classic — skips Stripe/entitlement entirely
+  - Demo events show a muted "(DEMO)" tag next to event name on host dashboard
+- Host View nav fix (April 2026):
+  - Host View tab now always navigates logged-in users to host-dashboard
+  - HostDashboardEmpty shown when no active event — displays "No Active Event", + New Event button, and Create Demo Event link (admin only)
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
