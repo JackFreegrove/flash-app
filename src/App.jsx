@@ -491,8 +491,17 @@ function PricingPage({ onSelect, onNavToTerms }) {
   const [loadingTier, setLoadingTier] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsPrompt, setShowTermsPrompt] = useState(false);
+  const termsRef = useRef(null);
 
   const handleCheckout = async (priceId, tier) => {
+    if (!termsAccepted) {
+      // Option A: highlight checkbox and show inline message.
+      // To switch to Option C (modal), replace these two lines with: setShowTermsPrompt(true); return;
+      setShowTermsPrompt(true);
+      termsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const { data } = await supabase.auth.getSession();
     if (!data?.session) { onSelect(tier); return; }
     setLoadingTier(tier);
@@ -516,6 +525,10 @@ function PricingPage({ onSelect, onNavToTerms }) {
     }
   };
 
+  const handleTermsChange = (checked) => {
+    setTermsAccepted(checked);
+    if (checked) setShowTermsPrompt(false);
+  };
 
   const topTiers = [
     { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '3 each', life: '5 days', archive: 'Add-on €15/yr', priceId: PRICES.momento, subtitle: 'Ideal for hens, stags & small parties' },
@@ -544,7 +557,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
         <div>⏱ Album live for {tier.life}</div>
         <div>🗄 Archive: {tier.archive}</div>
       </div>
-      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null || !termsAccepted} title={!termsAccepted ? "Please accept the Terms & Conditions to continue" : ""}>
+      <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key)} disabled={loadingTier !== null}>
         {loadingTier === tier.key ? "Redirecting…" : "Book Now →"}
       </button>
     </div>
@@ -554,11 +567,26 @@ function PricingPage({ onSelect, onNavToTerms }) {
     <div>
       <div className="section-title">The Moment's <em>Good Enough.</em></div>
       <div className="section-sub">No app. No filters. No retakes. Your <span style={{ fontStyle: 'italic' }}>REAL</span> night. Captured.</div>
-      <div className="terms-check-row" style={{ marginBottom: 24 }}>
-        <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
-        <label htmlFor="terms-accept">
-          I have read and agree to the <a onClick={onNavToTerms}>Terms &amp; Conditions</a> and <a onClick={onNavToTerms}>Privacy Policy</a>.
-        </label>
+      <div
+        ref={termsRef}
+        className="terms-check-row"
+        style={{
+          marginBottom: 24,
+          border: showTermsPrompt ? `1px solid ${COLORS.danger}` : undefined,
+          transition: 'border-color 0.2s',
+        }}
+      >
+        <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={e => handleTermsChange(e.target.checked)} />
+        <div>
+          <label htmlFor="terms-accept">
+            I have read and agree to the <a onClick={onNavToTerms}>Terms &amp; Conditions</a> and <a onClick={onNavToTerms}>Privacy Policy</a>.
+          </label>
+          {showTermsPrompt && (
+            <div style={{ color: COLORS.danger, fontSize: 10, marginTop: 6, letterSpacing: '0.04em' }}>
+              Please accept the Terms &amp; Conditions and Privacy Policy to continue.
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {topTiers.map(tier => renderTierCard(tier, false))}
@@ -569,7 +597,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="card-title">Archive Add-On</div>
         <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
-        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null || !termsAccepted}>
+        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null}>
           {loadingTier === 'archive' ? "Redirecting…" : "Add Archive — €15/yr"}
         </button>
       </div>
