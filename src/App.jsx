@@ -715,7 +715,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
 }
 
 // ── HOST: QR + Dashboard ──────────────────────────────────────────────────────
-function HostDashboard({ event, onViewAlbum, onNewEvent }) {
+function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
   const revealMs = event.revealDate instanceof Date && !isNaN(event.revealDate) ? event.revealDate.getTime() : Infinity;
   const { display, remaining } = useCountdown(revealMs);
   const revealed = remaining === 0;
@@ -771,10 +771,17 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32}}>
         <div>
-          <div className="section-title">{event.name}</div>
+          <div className="section-title">{event.name}{event.isDemo && <span style={{ fontSize: 11, fontFamily: 'inherit', fontWeight: 400, color: COLORS.muted, letterSpacing: '0.06em', marginLeft: 10, verticalAlign: 'middle', textTransform: 'uppercase' }}>(demo)</span>}</div>
           <div className="section-sub">{event.isPublic ? "Public" : "Private"} · {event.photos} photos/guest · Expires in {TIER_EXPIRY_DAYS[event.tier] ?? 14} days</div>
         </div>
-        <button className="btn btn-outline btn-sm" onClick={onNewEvent}>+ New Event</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {onCreateDemo && (
+            <button className="btn btn-sm" style={{ background: 'none', border: 'none', color: COLORS.muted, fontSize: 11, cursor: 'pointer', padding: 0, textDecoration: 'underline' }} onClick={onCreateDemo}>
+              Create Demo Event
+            </button>
+          )}
+          <button className="btn btn-outline btn-sm" onClick={onNewEvent}>+ New Event</button>
+        </div>
       </div>
 
       <div className="qr-card">
@@ -1062,7 +1069,10 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     c.toBlob(async (blob) => {
       if (!blob) return;
       setUploading(true);
-      const path = `${event.id}/${crypto.randomUUID()}.jpg`;
+      const sanitise = (str) => str.replace(/[^a-zA-Z0-9 \-_]/g, '').trim();
+      const folderName = `${sanitise(event.name)} [${event.id.slice(0, 8)}]`;
+      const fileName = `${sanitise(takerId)} ${shots.length + 1}.jpg`;
+      const path = `${folderName}/${fileName}`;
       const { error: uploadError } = await supabase.storage
         .from('photos')
         .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
@@ -1523,6 +1533,30 @@ export default function App() {
       setInitialEntitlementId(null);
     }
   };
+  const handleCreateDemo = async () => {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const revealDate = new Date(now.getTime() + 60 * 60 * 1000);
+    const expiresAt = new Date(revealDate);
+    expiresAt.setDate(expiresAt.getDate() + 14);
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from('events').insert({
+      id,
+      name: 'Demo Event',
+      date: today,
+      photos_per_guest: 5,
+      reveal_time: revealDate.toISOString(),
+      is_public: true,
+      is_demo: true,
+      tier: 'classic',
+      archived: false,
+      archive_expires_at: null,
+      expires_at: expiresAt.toISOString(),
+    });
+    if (error) { alert('Demo event creation failed: ' + error.message); return; }
+    setEvent({ id, name: 'Demo Event', date: today, photos: 5, revealDate, isPublic: true, isDemo: true, tier: 'classic', approvedAt: null, shotsTaken: [], guests: [] });
+    setView('host-dashboard');
+  };
   const handleApprove = (approvedAt) => { setEvent(e => ({ ...e, approvedAt })); };
   const handleGuestEnter = (name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); };
 
@@ -1587,7 +1621,7 @@ export default function App() {
               {view === "terms" && <TermsPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
               {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
               {view === "host-dashboard" && event && (
-                <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} />
+                <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
               )}
               {view === "host-album" && event && (
                 <AlbumView event={event} onBack={() => setView("host-dashboard")} onApprove={handleApprove} />
