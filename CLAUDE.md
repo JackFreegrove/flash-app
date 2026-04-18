@@ -33,18 +33,23 @@ No app download required. The constraints are the product.
 9. ALWAYS make one change at a time — confirm it works before proceeding
 10. ALWAYS match existing code style and naming conventions
 
-## Pricing (never change without instruction)
-Momento €59 (30 guests, 3 photos, 5d album) | Classic €99 (100 guests, 5 photos, 14d album)
-Premium €199 (unlimited, 10 photos, 60d album, 1yr archive free)
-Archive add-on: €15/year | Custom branding: €49/event
-Venue licensing: Partner €1,200/yr | Professional €2,500/yr | Enterprise €4,500/yr
-(Venue licensing is direct sales only — not on the consumer pricing page)
+## PRICING (never change without instruction)
+| Tier    | Price | Guests    | Photos | Album Life | Archive        |
+|---------|-------|-----------|--------|------------|----------------|
+| Momento | €59   | 30        | 3 each | 5 days     | Add-on €15/yr  |
+| Classic | €99   | 100       | 5 each | 14 days    | Add-on €15/yr  |
+| Premium | €199  | Unlimited | 10 each| 60 days    | 1 year free    |
 
-## PHOTOS PER GUEST (correct values)
-- Momento: 3 photos
-- Classic: 5 photos
-- Premium: 10 photos
+Archive add-on: €15/year (subscription, separate from tier purchase)
 
+Venue licensing (direct sales only — NOT on consumer pricing page):
+- Partner €1,200/yr | Professional €2,500/yr | Enterprise €4,500/yr
+
+## STRIPE PRICE IDs (TEST MODE)
+- momento: price_1TME3URoyXRpjOGpiodxnPkb
+- classic:  price_1TFzdtRoyXRpjOGpQTHJGKQ0
+- premium:  price_1TME4QRoyXRpjOGpfiWHhcmB
+- archive:  price_1TFzi0RoyXRpjOGpfO3J11AL
 
 ## DATABASE SCHEMA
 ```sql
@@ -58,64 +63,58 @@ photos (id UUID PK, event_id UUID FK, guest_id UUID FK, storage_path TEXT, taken
 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 STRIPE_SECRET_KEY (server only — never expose to frontend)
 VITE_STRIPE_PUBLISHABLE_KEY
-STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM
-STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
+STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_ARCHIVE
 
 ## FEATURE STATUS
 ### WORKING — DO NOT TOUCH
 - Host auth (signup/login/logout) via Supabase
-- Pricing page, 4 tiers
+- Pricing page — 3 consumer tiers (Momento, Classic, Premium)
 - Stripe checkout (TEST MODE)
 - Event creation form
 - QR code generation (links to eventsnapshotco.com/event/{id})
 - Guest browser camera — rear camera, shot countdown
+- Selfie/front camera toggle in GuestCamera.jsx
 - Photo upload to Supabase Storage
 - Album reveal with countdown timer
 - Archive add-on subscription
 - Vercel auto-deployment
-- Selfie/front camera toggle in GuestCamera.jsx
 - Security hardening
-- Fix photos per guest to correct tier values
-- - UI/UX audit complete (11 findings fixed — iOS zoom, upload error handling, 
-  touch targets, accessibility, album fetch errors, pricing display)
-- Transactional email sequence planned (Resend) — not yet built
-- - UI/UX audit complete (11 findings fixed — iOS zoom, upload error handling, 
-  touch targets, accessibility, album fetch errors, pricing display)
+- UI/UX audit (11 findings fixed — iOS zoom, upload error handling, touch targets, accessibility, album fetch errors, pricing display)
 - Critical bug fixes (April 2026):
-  - Photo column names corrected (taker_id, created_at) — photo system now works
+  - Photo column names corrected (taker_id, created_at)
   - Photo insert error handling — failed uploads show error, retain shot
   - Stripe origin header fallback — checkout no longer breaks without Origin header
   - Reveal date guard — invalid dates no longer show album as immediately revealed
   - Timezone fix — reveal date parsed in local time not UTC
   - Auth crash fix — getSession uses optional chaining
   - QR download blob URL leak fixed
+- Stripe webhook handler (April 2026) — payment bypass vulnerability resolved, entitlements written server-side on confirmed payment
+- Pricing strategy update (April 2026):
+  - Removed Venue Partner per-event tier, updated to 3-tier model
+  - Momento repriced to €59 / 3 photos / 5-day album
+  - Premium repriced to €199 / 10 photos / 60-day album
+  - Pricing layout: Momento + Classic side-by-side, Premium full-width below
+  - "Best Value" badge on Premium, "Most Popular" badge on Classic
+  - Momento subtitle: "Ideal for hens, stags & small parties"
+  - Album expiry is now tier-aware (5 / 14 / 60 days)
+  - Stripe whitelist in api/create-checkout-session.js updated to match
 
 ### PENDING BUILD TASKS (priority order)
-1. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
-2. Switch Stripe test → live mode (only after task 1 and 3 complete)
+1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
+2. Switch Stripe test → live mode (only after tasks 1 complete)
 3. Privacy Policy + T&Cs page (/legal route)
-4. 4. Intermittent event creation bug — investigate and fix (sometimes fails 
-   on Supabase insert during event creation / QR generation)
+4. Intermittent event creation bug — investigate and fix (sometimes fails on Supabase insert during event creation / QR generation)
 5. Album sort/filter feature (chronological vs grouped by taker)
 6. Album view UI refinement + merchandise CTA placeholder at reveal
 7. Transactional email sequence via Resend (6 emails — see business plan)
 8. hello@eventsnapshotco.com setup (after domain connected)
-9. 4. Stripe webhook handler — payment bypass vulnerability (Finding 6) 
-   must be resolved before Stripe goes live. Get explanation from Claude 
-   Code before building.
-5. Connect EventSnapshotCo.com to Vercel (DNS — waiting on father's 
-   registrar details)
-6. Switch Stripe test → live mode (only after tasks 4 and 5 complete)
-7. Privacy Policy + T&Cs page (/legal route)
-8. Album sort/filter (chronological vs grouped by taker)
-9. Album view UI refinement + merchandise CTA placeholder
-10. Transactional email sequence via Resend (6 emails)
-11. hello@eventsnapshotco.com (after domain connected)
-12. Landing page (after domain connected and Stripe live)
+9. Landing page (after domain connected and Stripe live)
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
 - Event merchandise (canvas, keyrings, mugs)
+- Custom branding add-on (€49/event)
+- Venue licensing portal
 
 ## HOW TO START EACH SESSION
 Use this format:

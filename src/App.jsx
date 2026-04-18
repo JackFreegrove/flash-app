@@ -554,6 +554,12 @@ function PricingPage({ onSelect, onNavToTerms }) {
     <div>
       <div className="section-title">The Moment's <em>Good Enough.</em></div>
       <div className="section-sub">No app. No filters. No retakes. Your <span style={{ fontStyle: 'italic' }}>REAL</span> night. Captured.</div>
+      <div className="terms-check-row" style={{ marginBottom: 24 }}>
+        <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
+        <label htmlFor="terms-accept">
+          I have read and agree to the <a onClick={onNavToTerms}>Terms &amp; Conditions</a> and <a onClick={onNavToTerms}>Privacy Policy</a>.
+        </label>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {topTiers.map(tier => renderTierCard(tier, false))}
       </div>
@@ -563,15 +569,9 @@ function PricingPage({ onSelect, onNavToTerms }) {
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="card-title">Archive Add-On</div>
         <p style={{ fontSize: 11, color: COLORS.muted, marginBottom: 16 }}>Keep your album forever. €15/year. Cancel anytime.</p>
-        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null || !termsAccepted} title={!termsAccepted ? "Please accept the Terms & Conditions to continue" : ""}>
+        <button className="btn btn-outline" onClick={() => handleCheckout(PRICES.archive, 'archive')} disabled={loadingTier !== null || !termsAccepted}>
           {loadingTier === 'archive' ? "Redirecting…" : "Add Archive — €15/yr"}
         </button>
-      </div>
-      <div className="terms-check-row">
-        <input type="checkbox" id="terms-accept" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />
-        <label htmlFor="terms-accept">
-          I have read and agree to the <a onClick={onNavToTerms}>Terms &amp; Conditions</a> and acknowledge the <a onClick={onNavToTerms}>Privacy Policy</a>.
-        </label>
       </div>
       {checkoutError && <div style={{ color: COLORS.danger, fontSize: 11, marginTop: 12, textAlign: 'center' }}>{checkoutError}</div>}
     </div>
@@ -697,16 +697,15 @@ function HostDashboard({ event, onViewAlbum, onNewEvent }) {
   const [guestCount, setGuestCount] = useState(0);
 
   useEffect(() => {
-    supabase
-      .from('photos')
-      .select('taker_id')
-      .eq('event_id', event.id)
+    supabase.from('photos').select('id').eq('event_id', event.id)
       .then(({ data, error }) => {
         if (error) { console.error('Failed to load photo stats:', error); return; }
-        if (data) {
-          setPhotoCount(data.length);
-          setGuestCount(new Set(data.map(r => r.taker_id)).size);
-        }
+        if (data) setPhotoCount(data.length);
+      });
+    supabase.from('guest_sessions').select('id').eq('event_id', event.id)
+      .then(({ data, error }) => {
+        if (error) { console.error('Failed to load guest count:', error); return; }
+        if (data) setGuestCount(data.length);
       });
   }, [event.id]);
 
@@ -878,18 +877,64 @@ function AlbumView({ event, onBack }) {
   );
 }
 
+// ── GUEST: Email capture (public events only) ─────────────────────────────────
+function EmailCapture({ sessionId }) {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!email.trim() || saving) return;
+    setSaving(true);
+    await supabase.from('guest_sessions').update({ email: email.trim() }).eq('id', sessionId);
+    setSubmitted(true);
+    setSaving(false);
+  };
+
+  if (submitted) {
+    return <div style={{ marginTop: 24, fontSize: 11, color: COLORS.success }}>We'll let you know when the album is ready.</div>;
+  }
+
+  return (
+    <div style={{ marginTop: 32, borderTop: `1px solid ${COLORS.border}`, paddingTop: 28 }}>
+      <div style={{ fontSize: 11, color: COLORS.muted, lineHeight: 1.7, marginBottom: 16 }}>
+        The hosts have made this album available to everyone who helped capture it. Enter your email to receive the album when it's revealed.
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          type="email"
+          placeholder="your@email.com"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          style={{
+            flex: 1, padding: "10px 12px", border: `1px solid ${COLORS.border}`,
+            borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 13,
+            background: COLORS.bg, color: COLORS.text, outline: "none",
+          }}
+        />
+        <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || !email.trim()}>
+          {saving ? "…" : "Notify me"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── GUEST: Camera ─────────────────────────────────────────────────────────────
-function GuestCamera({ event, takerId }) {
+function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const [facingMode, setFacingMode] = useState("environment");
   const [permDenied, setPermDenied] = useState(false);
-  const [shots, setShots] = useState([]);
+  const [shots, setShots] = useState(() =>
+    Array.from({ length: initialShots }, () => ({ url: null, taker: takerId, time: 0 }))
+  );
   const [flashing, setFlashing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(initialShots >= event.photos);
   const [shotError, setShotError] = useState("");
   const maxShots = event.photos;
 
@@ -967,7 +1012,14 @@ function GuestCamera({ event, takerId }) {
       const url = c.toDataURL("image/jpeg", 0.85);
       const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
       setShots(newShots);
-      if (newShots.length >= maxShots) {
+      const isComplete = newShots.length >= maxShots;
+      if (sessionId) {
+        supabase.from('guest_sessions')
+          .update({ photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) })
+          .eq('id', sessionId)
+          .then(() => {});
+      }
+      if (isComplete) {
         setTimeout(() => setDone(true), 600);
       }
     }, 'image/jpeg', 0.85);
@@ -985,6 +1037,7 @@ function GuestCamera({ event, takerId }) {
             {new Date(event.revealDate).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}.<br /><br />
             Thank you for being part of <em>{event.name}</em>.
           </div>
+          {event.isPublic && sessionId && <EmailCapture sessionId={sessionId} />}
         </div>
       </div>
     );
@@ -1076,25 +1129,115 @@ function GuestCamera({ event, takerId }) {
 
 // ── GUEST: Entry ──────────────────────────────────────────────────────────────
 function GuestEntry({ event, onEnter }) {
-  const [id, setId] = useState("");
+  const [name, setName] = useState("");
+  const [sessionStatus, setSessionStatus] = useState(null); // null=checking, 'none', 'blocked'
+  const [starting, setStarting] = useState(false);
+  const [entryError, setEntryError] = useState("");
+
+  const getDeviceId = () => {
+    let id = localStorage.getItem('snapshot_device_id');
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem('snapshot_device_id', id); }
+    return id;
+  };
+
+  useEffect(() => {
+    const deviceId = getDeviceId();
+    const fingerprint = `${event.id}|${deviceId}`;
+    supabase
+      .from('guest_sessions')
+      .select('*')
+      .eq('event_id', event.id)
+      .eq('device_fingerprint', fingerprint)
+      .maybeSingle()
+      .then(async ({ data, error: err }) => {
+        if (err || !data) { setSessionStatus('none'); return; }
+        if (data.completed) { setSessionStatus('blocked'); return; }
+        const { data: photoRows } = await supabase
+          .from('photos')
+          .select('id')
+          .eq('event_id', event.id)
+          .eq('taker_id', data.taker_name);
+        const count = photoRows?.length ?? data.photos_taken;
+        if (count >= event.photos) {
+          await supabase.from('guest_sessions').update({ completed: true, photos_taken: count }).eq('id', data.id);
+          setSessionStatus('blocked');
+          return;
+        }
+        onEnter(data.taker_name, data.id, count);
+      });
+  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleOpen = async () => {
+    const trimmed = name.trim().slice(0, 60);
+    if (!trimmed || starting) return;
+    setStarting(true);
+    setEntryError("");
+    const fingerprint = `${event.id}|${getDeviceId()}`;
+    const { data, error: insertError } = await supabase
+      .from('guest_sessions')
+      .insert({ event_id: event.id, device_fingerprint: fingerprint, taker_name: trimmed, photos_taken: 0, completed: false })
+      .select('id')
+      .single();
+    if (insertError) {
+      setEntryError("Could not start session. Please try again.");
+      setStarting(false);
+      return;
+    }
+    onEnter(trimmed, data.id, 0);
+  };
+
+  if (sessionStatus === null) {
+    return (
+      <div className="guest-wrap">
+        <div style={{ textAlign: "center", padding: "80px 20px", color: COLORS.muted, fontSize: 12, letterSpacing: "0.06em" }}>
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionStatus === 'blocked') {
+    return (
+      <div className="guest-wrap">
+        <div className="done-wrap">
+          <div style={{ fontSize: 56, marginBottom: 20 }}>🎞️</div>
+          <div className="done-title">Film used up.</div>
+          <div className="done-sub">
+            You've already used your camera for this event.<br /><br />
+            The album reveals on {new Date(event.revealDate).toLocaleDateString("en-US", { month: "long", day: "numeric" })} at{" "}
+            {new Date(event.revealDate).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="guest-wrap">
       <div className="guest-header">
-        <div style={{fontSize:40,marginBottom:16}}>📷</div>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>📷</div>
         <div className="guest-event">{event.name}</div>
         <div className="guest-sub">Disposable Camera · {event.photos} shots</div>
       </div>
       <div className="card">
         <div className="card-title">Your Name or Nickname</div>
-        <div className="field" style={{marginBottom:16}}>
+        <div className="field" style={{ marginBottom: 16 }}>
           <label htmlFor="taker-id">Taker ID</label>
-          <input id="taker-id" placeholder="e.g. Uncle Dave, Table 7…" value={id} onChange={e => setId(e.target.value)} maxLength={60} onKeyDown={e => e.key === 'Enter' && id.trim() && onEnter(id.trim().slice(0, 60))} />
+          <input
+            id="taker-id"
+            placeholder="e.g. Uncle Dave, Table 7…"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            maxLength={60}
+            onKeyDown={e => e.key === 'Enter' && handleOpen()}
+          />
         </div>
-        <div style={{fontSize:10,color:COLORS.muted,marginBottom:20,lineHeight:1.7}}>
+        <div style={{ fontSize: 10, color: COLORS.muted, marginBottom: 20, lineHeight: 1.7 }}>
           You'll get {event.photos} shots. No retakes, no filters, no preview. Album reveals the next day.
         </div>
-        <button className="btn btn-primary btn-full" onClick={() => id.trim() && onEnter(id.trim().slice(0, 60))}>
-          Open Camera →
+        {entryError && <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 12 }}>{entryError}</div>}
+        <button className="btn btn-primary btn-full" onClick={handleOpen} disabled={!name.trim() || starting}>
+          {starting ? "Starting…" : "Open Camera →"}
         </button>
       </div>
     </div>
@@ -1128,6 +1271,8 @@ export default function App() {
   const [pricingError, setPricingError] = useState("");
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [initialShots, setInitialShots] = useState(0);
 
   // Legal page deep-links
   useEffect(() => {
@@ -1207,7 +1352,7 @@ export default function App() {
       setInitialEntitlementId(null);
     }
   };
-  const handleGuestEnter = (id) => { setTakerId(id); setView("guest-camera"); };
+  const handleGuestEnter = (name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); };
 
   const tabs = [
     { id: "host", label: "Host View" },
@@ -1279,7 +1424,7 @@ export default function App() {
                 <GuestEntry event={event} onEnter={handleGuestEnter} />
               )}
               {view === "guest-camera" && event && (
-                <GuestCamera event={event} takerId={takerId} />
+                <GuestCamera event={event} takerId={takerId} sessionId={sessionId} initialShots={initialShots} />
               )}
             </>
           )}
