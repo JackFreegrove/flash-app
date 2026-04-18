@@ -611,7 +611,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
   );
 }
 // ── HOST: Create Event ────────────────────────────────────────────────────────
-function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive }) {
+function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, userId }) {
   const [form, setForm] = useState({
     name: "",
     date: "",
@@ -640,6 +640,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive }) {
     const id = crypto.randomUUID();
     const { error } = await supabase.from('events').insert({
       id,
+      host_id: userId,
       name: form.name,
       date: form.date,
       photos_per_guest: Number(form.photos),
@@ -1463,7 +1464,6 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [initialPhotos, setInitialPhotos] = useState(null);
   const [initialTier, setInitialTier] = useState(null);
-  const [initialEntitlementId, setInitialEntitlementId] = useState(null);
   const [pricingError, setPricingError] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
   const [archiveActive, setArchiveActive] = useState(false);
@@ -1540,7 +1540,6 @@ export default function App() {
         if (entitlement) {
           setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
           setInitialTier(entitlement.tier);
-          setInitialEntitlementId(entitlement.id);
         } else {
           const savedTier = sessionStorage.getItem('archiveReturnTier');
           const savedPhotos = sessionStorage.getItem('archiveReturnPhotos');
@@ -1559,7 +1558,6 @@ export default function App() {
       }
       setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
       setInitialTier(entitlement.tier);
-      setInitialEntitlementId(entitlement.id);
       if (archivePending) setPendingArchiveUpsell(true);
       setView("host-create");
     });
@@ -1585,15 +1583,9 @@ export default function App() {
     setView("pricing");
   };
 
-  const handleCreate = async (ev) => {
+  const handleCreate = (ev) => {
     setEvent(ev);
     setView("host-dashboard");
-    if (initialEntitlementId) {
-      await supabase.from('entitlements')
-        .update({ used: true })
-        .eq('id', initialEntitlementId);
-      setInitialEntitlementId(null);
-    }
   };
   const handleCreateDemo = async () => {
     const now = new Date();
@@ -1604,6 +1596,7 @@ export default function App() {
     const id = crypto.randomUUID();
     const { error } = await supabase.from('events').insert({
       id,
+      host_id: user?.id,
       name: 'Demo Event',
       date: today,
       photos_per_guest: 5,
@@ -1722,7 +1715,7 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} archiveActive={archiveActive} />
+                  <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} archiveActive={archiveActive} userId={user?.id} />
                 </>
               )}
               {view === "host-dashboard" && (
