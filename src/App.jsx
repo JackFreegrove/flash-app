@@ -1382,6 +1382,7 @@ function rowToEvent(data) {
     photos: data.photos_per_guest,
     revealDate: new Date(data.reveal_time),
     isPublic: data.is_public,
+    isDemo: data.is_demo ?? false,
     tier: data.tier,
     approvedAt: data.approved_at ? new Date(data.approved_at) : null,
     shotsTaken: [],
@@ -1596,8 +1597,27 @@ export default function App() {
   useEffect(() => { viewRef.current = view; }, [view]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (!session?.user) return;
+
+      // Skip event restore when another effect owns navigation for this URL
+      const path = window.location.pathname;
+      const isGuestUrl = /^\/event\//.test(path);
+      const isLegalUrl = /^\/(privacy|terms)$/.test(path);
+      const isSuccessRedirect = new URLSearchParams(window.location.search).get('success') === 'true';
+      if (isGuestUrl || isLegalUrl || isSuccessRedirect) return;
+
+      const { data: row } = await supabase
+        .from('events')
+        .select('*')
+        .eq('host_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (row) setEvent(rowToEvent(row));
+      setView('host-dashboard');
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
