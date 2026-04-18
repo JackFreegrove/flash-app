@@ -7,6 +7,13 @@ const VALID_PRICES = {
   price_1TFzi0RoyXRpjOGpfO3J11AL: { tier: 'archive', mode: 'subscription' },
 };
 
+const ALLOWED_ORIGINS = new Set([
+  'https://flash-app-gamma.vercel.app',
+  'https://eventsnapshotco.com',
+  'https://www.eventsnapshotco.com',
+]);
+const DEFAULT_ORIGIN = 'https://flash-app-gamma.vercel.app';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -21,14 +28,9 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-  const ALLOWED_ORIGINS = new Set([
-    'https://flash-app-gamma.vercel.app',
-    'https://eventsnapshotco.com',
-    'https://www.eventsnapshotco.com',
-  ]);
   const base = ALLOWED_ORIGINS.has(req.headers.origin)
     ? req.headers.origin
-    : 'https://flash-app-gamma.vercel.app';
+    : DEFAULT_ORIGIN;
   const archiveSuffix = withArchive && mode === 'payment' ? '&archive=pending' : '';
 
   try {

@@ -22,6 +22,47 @@ const TIER_EXPIRY_DAYS = {
   classic: 14,
   premium: 60,
 };
+
+const ARCHIVE_PRICE_DISPLAY = '€15/yr';
+
+const TIER_DISPLAY_DATA = [
+  { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: `${TIER_PHOTOS.momento} each`, life: `${TIER_EXPIRY_DAYS.momento} days`, archive: `Add-on ${ARCHIVE_PRICE_DISPLAY}`, priceId: PRICES.momento, subtitle: 'Ideal for hens, stags & small parties' },
+  { key: 'classic',  label: 'Classic',  price: '€99', guests: '100', photos: `${TIER_PHOTOS.classic} each`,  life: `${TIER_EXPIRY_DAYS.classic} days`,  archive: `Add-on ${ARCHIVE_PRICE_DISPLAY}`, priceId: PRICES.classic, popular: true },
+  { key: 'premium', label: 'Premium', price: '€199', guests: 'Unlimited', photos: `${TIER_PHOTOS.premium} each`, life: `${TIER_EXPIRY_DAYS.premium} days`, archive: '1 year free', priceId: PRICES.premium, bestValue: true },
+];
+
+const TIMINGS = {
+  COUNTDOWN_TICK_MS: 1000,
+  FLASH_DURATION_MS: 150,
+  DONE_DELAY_MS: 600,
+  PAYMENT_POLL_MS: 2000,
+  PAYMENT_POLL_MAX: 5,
+};
+
+const STORAGE_KEYS = {
+  DEVICE_ID: 'snapshot_device_id',
+  ARCHIVE_TIER: 'archiveReturnTier',
+  ARCHIVE_PHOTOS: 'archiveReturnPhotos',
+};
+
+const QR_CANVAS_SIZE = 400;
+const VIDEO_FALLBACK = { width: 400, height: 533 }; // 3:4 fallback when camera hasn't reported dimensions
+const JPEG_QUALITY = 0.85;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GUEST_NAME_MAX_LEN = 60;
+const ADMIN_EMAIL = 'eventsnapshotco@gmail.com';
+
+const DEMO_EVENT = {
+  name: 'Demo Event',
+  photos_per_guest: 5,
+  tier: 'classic',
+  reveal_hours: 1,
+};
+
+// taker_name in the photos table stores a guest display name string (e.g. "Uncle Dave"),
+// mirroring guest_sessions.taker_name. It is not a foreign key ID.
+const sanitiseName = (str) => str.replace(/[^a-zA-Z0-9 \-_]/g, '').trim();
+
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
   bg: "#FFFFFF",
@@ -337,16 +378,13 @@ const css = `
   }
 `;
 
-// ── Simple QR SVG (checkerboard pattern as QR placeholder) ────────────────────
-
-
 // ── Countdown timer ───────────────────────────────────────────────────────────
 function useCountdown(targetTime) {
   const [remaining, setRemaining] = useState(() => Math.max(0, targetTime - Date.now()));
   useEffect(() => {
     const tick = () => setRemaining(Math.max(0, targetTime - Date.now()));
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, TIMINGS.COUNTDOWN_TICK_MS);
     return () => clearInterval(id);
   }, [targetTime]);
   const h = Math.floor(remaining / 3600000);
@@ -532,11 +570,8 @@ function PricingPage({ onSelect, onNavToTerms }) {
     if (checked) setShowTermsPrompt(false);
   };
 
-  const topTiers = [
-    { key: 'momento', label: 'Momento', price: '€59', guests: '30', photos: '3 each', life: '5 days', archive: 'Add-on €15/yr', priceId: PRICES.momento, subtitle: 'Ideal for hens, stags & small parties' },
-    { key: 'classic', label: 'Classic', price: '€99', guests: '100', photos: '5 each', life: '14 days', archive: 'Add-on €15/yr', priceId: PRICES.classic, popular: true },
-  ];
-  const premiumTier = { key: 'premium', label: 'Premium', price: '€199', guests: 'Unlimited', photos: '10 each', life: '60 days', archive: '1 year free', priceId: PRICES.premium, bestValue: true };
+  const topTiers = TIER_DISPLAY_DATA.filter(t => t.key !== 'premium');
+  const premiumTier = TIER_DISPLAY_DATA.find(t => t.key === 'premium');
 
   const renderTierCard = (tier, fullWidth) => (
     <div key={tier.key} className="card" style={{ position: 'relative', border: tier.popular ? `2px solid ${COLORS.accent}` : undefined }}>
@@ -566,7 +601,7 @@ function PricingPage({ onSelect, onNavToTerms }) {
             checked={archiveChecked[tier.key]}
             onChange={e => setArchiveChecked(prev => ({ ...prev, [tier.key]: e.target.checked }))}
           />
-          Add Archive — €15/yr
+          Add Archive — {ARCHIVE_PRICE_DISPLAY}
         </label>
       )}
       <button className="btn btn-primary btn-full" onClick={() => handleCheckout(tier.priceId, tier.key, archiveChecked[tier.key] ?? false)} disabled={loadingTier !== null}>
@@ -626,6 +661,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
 
   const handleCreate = async () => {
     if (!form.name || !form.date) return;
+    if (!initialTier) { setSaveError("Plan details missing — please go back to pricing and try again."); return; }
     setSaving(true);
     setSaveError("");
     const eventDate = new Date(form.date + 'T00:00:00');
@@ -638,7 +674,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
     expiresAt.setDate(expiresAt.getDate() + expiryDays);
 
     const id = crypto.randomUUID();
-    const { error } = await supabase.from('events').insert({
+    const payload = {
       id,
       host_id: userId,
       name: form.name,
@@ -650,7 +686,14 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
       archived: false,
       archive_expires_at: null,
       expires_at: expiresAt.toISOString(),
-    });
+    };
+    let { error } = await supabase.from('events').insert(payload);
+    if (error && error.code !== '23505') {
+      await new Promise(r => setTimeout(r, 1000));
+      ({ error } = await supabase.from('events').insert(payload));
+      // PK conflict on retry means the first insert succeeded but the response was lost
+      if (error?.code === '23505') error = null;
+    }
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
     onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null, shotsTaken: [], guests: [] });
@@ -671,7 +714,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
         <div className="form-row">
           <div className="field">
             <label>Event Name</label>
-            <input placeholder="Summer Gala 2025" value={form.name} onChange={e => set("name", e.target.value)} />
+            <input placeholder="e.g. Summer Wedding" value={form.name} onChange={e => set("name", e.target.value)} />
           </div>
           <div className="field">
             <label>Event Date</label>
@@ -786,12 +829,12 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = 400;
-      canvas.height = 400;
+      canvas.width = QR_CANVAS_SIZE;
+      canvas.height = QR_CANVAS_SIZE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, 400, 400);
-      ctx.drawImage(img, 0, 0, 400, 400);
+      ctx.fillRect(0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
+      ctx.drawImage(img, 0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
       URL.revokeObjectURL(url);
       const a = document.createElement('a');
       a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
@@ -905,7 +948,7 @@ function AlbumView({ event, onBack, onApprove }) {
     setLoading(true);
     supabase
       .from('photos')
-      .select('id, taker_id, storage_path, created_at')
+      .select('id, taker_name, storage_path, created_at')
       .eq('event_id', event.id)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
@@ -914,7 +957,7 @@ function AlbumView({ event, onBack, onApprove }) {
         } else if (data) {
           setPhotos(data.map(row => ({
             url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
-            taker: row.taker_id,
+            taker: row.taker_name,
             takenAt: row.created_at,
           })));
         }
@@ -1008,7 +1051,7 @@ function EmailCapture({ sessionId }) {
   const handleSubmit = async () => {
     const trimmed = email.trim();
     if (!trimmed || saving) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
+    if (!EMAIL_PATTERN.test(trimmed)) return;
     setSaving(true);
     await supabase.from('guest_sessions').update({ email: trimmed }).eq('id', sessionId);
     setSubmitted(true);
@@ -1093,13 +1136,13 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     if (shots.length >= maxShots || flashing || uploading || switching) return;
     setShotError("");
     setFlashing(true);
-    setTimeout(() => setFlashing(false), 150);
+    setTimeout(() => setFlashing(false), TIMINGS.FLASH_DURATION_MS);
 
     const v = videoRef.current;
     const c = canvasRef.current;
     if (!v || !c) return;
-    c.width = v.videoWidth || 400;
-    c.height = v.videoHeight || 533;
+    c.width = v.videoWidth || VIDEO_FALLBACK.width;
+    c.height = v.videoHeight || VIDEO_FALLBACK.height;
     const ctx = c.getContext("2d");
     // Un-mirror front camera so the saved photo isn't flipped
     if (facingMode === "user") {
@@ -1112,45 +1155,51 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     c.toBlob(async (blob) => {
       if (!blob) return;
       setUploading(true);
-      const sanitise = (str) => str.replace(/[^a-zA-Z0-9 \-_]/g, '').trim();
-      const folderName = `${sanitise(event.name)} [${event.id.slice(0, 8)}]`;
-      const fileName = `${sanitise(takerId)} ${shots.length + 1}.jpg`;
+      const folderName = `${sanitiseName(event.name)} [${event.id.slice(0, 8)}]`;
+      const fileName = `${sanitiseName(takerId)} ${shots.length + 1}.jpg`;
       const path = `${folderName}/${fileName}`;
       const { error: uploadError } = await supabase.storage
         .from('photos')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
 
       if (uploadError) {
         setUploading(false);
-        setShotError("Photo didn't save. Tap the shutter to try again.");
+        setShotError("Upload failed. Tap the shutter to try again.");
         return;
       }
       const { error: dbError } = await supabase.from('photos').insert({
         event_id: event.id,
-        taker_id: takerId,
+        taker_name: takerId,
         storage_path: path,
       });
       setUploading(false);
 
       if (dbError) {
-        setShotError("Photo didn't save. Tap the shutter to try again.");
+        setShotError("Photo uploaded but wasn't recorded. Tap the shutter to try again.");
         return;
       }
 
-      const url = c.toDataURL("image/jpeg", 0.85);
+      const url = c.toDataURL("image/jpeg", JPEG_QUALITY);
       const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
       setShots(newShots);
       const isComplete = newShots.length >= maxShots;
       if (sessionId) {
-        supabase.from('guest_sessions')
-          .update({ photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) })
-          .eq('id', sessionId)
-          .then(() => {});
+        const sessionUpdate = { photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) };
+        supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+          .then(({ error }) => {
+            if (error) {
+              return supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+                .then(({ error: retryError }) => {
+                  if (retryError) console.error('guest_sessions update failed after retry:', retryError);
+                });
+            }
+          })
+          .catch((err) => console.error('guest_sessions update error:', err));
       }
       if (isComplete) {
-        setTimeout(() => setDone(true), 600);
+        setTimeout(() => setDone(true), TIMINGS.DONE_DELAY_MS);
       }
-    }, 'image/jpeg', 0.85);
+    }, 'image/jpeg', JPEG_QUALITY);
   }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id]);
 
   if (done) {
@@ -1259,16 +1308,20 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
 function GuestEntry({ event, onEnter }) {
   const [name, setName] = useState("");
   const [sessionStatus, setSessionStatus] = useState(null); // null=checking, 'none', 'blocked'
+  const [sessionError, setSessionError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [starting, setStarting] = useState(false);
   const [entryError, setEntryError] = useState("");
 
   const getDeviceId = () => {
-    let id = localStorage.getItem('snapshot_device_id');
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem('snapshot_device_id', id); }
+    let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id); }
     return id;
   };
 
   useEffect(() => {
+    setSessionStatus(null);
+    setSessionError(false);
     const deviceId = getDeviceId();
     const fingerprint = `${event.id}|${deviceId}`;
     supabase
@@ -1284,7 +1337,7 @@ function GuestEntry({ event, onEnter }) {
           .from('photos')
           .select('id')
           .eq('event_id', event.id)
-          .eq('taker_id', data.taker_name);
+          .eq('taker_name', data.taker_name);
         const count = photoRows?.length ?? data.photos_taken;
         if (count >= event.photos) {
           await supabase.from('guest_sessions').update({ completed: true, photos_taken: count }).eq('id', data.id);
@@ -1292,11 +1345,14 @@ function GuestEntry({ event, onEnter }) {
           return;
         }
         onEnter(data.taker_name, data.id, count);
+      })
+      .catch(() => {
+        setSessionError(true);
       });
-  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [event.id, retryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpen = async () => {
-    const trimmed = name.trim().slice(0, 60);
+    const trimmed = name.trim().slice(0, GUEST_NAME_MAX_LEN);
     if (!trimmed || starting) return;
     setStarting(true);
     setEntryError("");
@@ -1314,6 +1370,24 @@ function GuestEntry({ event, onEnter }) {
     }
     onEnter(trimmed, data.id, 0);
   };
+
+  if (sessionError) {
+    return (
+      <div className="guest-wrap">
+        <div style={{ textAlign: "center", padding: "80px 20px" }}>
+          <div style={{ color: COLORS.muted, fontSize: 14, marginBottom: 20 }}>
+            Something went wrong. Please try again.
+          </div>
+          <button
+            className="btn-primary"
+            onClick={() => { setRetryKey(k => k + 1); }}
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (sessionStatus === null) {
     return (
@@ -1357,7 +1431,7 @@ function GuestEntry({ event, onEnter }) {
             placeholder="e.g. Uncle Dave, Table 7…"
             value={name}
             onChange={e => setName(e.target.value)}
-            maxLength={60}
+            maxLength={GUEST_NAME_MAX_LEN}
             onKeyDown={e => e.key === 'Enter' && handleOpen()}
           />
         </div>
@@ -1374,6 +1448,7 @@ function GuestEntry({ event, onEnter }) {
 }
 
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
+// Maps DB snake_case columns → camelCase JS properties used throughout the app.
 function rowToEvent(data) {
   return {
     id: data.id,
@@ -1399,7 +1474,7 @@ function GuestAlbumView({ event, guestName, guestEmail }) {
   useEffect(() => {
     supabase
       .from('photos')
-      .select('id, taker_id, storage_path, created_at')
+      .select('id, taker_name, storage_path, created_at')
       .eq('event_id', event.id)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
@@ -1408,7 +1483,7 @@ function GuestAlbumView({ event, guestName, guestEmail }) {
         } else if (data) {
           setPhotos(data.map(row => ({
             url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
-            taker: row.taker_id,
+            taker: row.taker_name,
           })));
         }
         setLoading(false);
@@ -1506,7 +1581,7 @@ export default function App() {
           return;
         }
         if (isRevealed && ev.isPublic && ev.approvedAt) {
-          const deviceId = localStorage.getItem('snapshot_device_id');
+          const deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
           if (!deviceId) { setView("guest-album"); return; }
           const fingerprint = `${ev.id}|${deviceId}`;
           const { data: session } = await supabase
@@ -1559,13 +1634,13 @@ export default function App() {
           setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
           setInitialTier(entitlement.tier);
         } else {
-          const savedTier = sessionStorage.getItem('archiveReturnTier');
-          const savedPhotos = sessionStorage.getItem('archiveReturnPhotos');
+          const savedTier = sessionStorage.getItem(STORAGE_KEYS.ARCHIVE_TIER);
+          const savedPhotos = sessionStorage.getItem(STORAGE_KEYS.ARCHIVE_PHOTOS);
           if (savedTier) setInitialTier(savedTier);
           if (savedPhotos) setInitialPhotos(Number(savedPhotos) || null);
         }
-        sessionStorage.removeItem('archiveReturnTier');
-        sessionStorage.removeItem('archiveReturnPhotos');
+        sessionStorage.removeItem(STORAGE_KEYS.ARCHIVE_TIER);
+        sessionStorage.removeItem(STORAGE_KEYS.ARCHIVE_PHOTOS);
         setView("host-create");
         return;
       }
@@ -1580,8 +1655,8 @@ export default function App() {
         return;
       }
 
-      if (attempt < 5) {
-        setTimeout(() => poll(attempt + 1), 2000);
+      if (attempt < TIMINGS.PAYMENT_POLL_MAX) {
+        setTimeout(() => poll(attempt + 1), TIMINGS.PAYMENT_POLL_MS);
       } else {
         window.history.replaceState({}, "", window.location.pathname);
         setVerifyingPayment(false);
@@ -1640,26 +1715,26 @@ export default function App() {
   const handleCreateDemo = async () => {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const revealDate = new Date(now.getTime() + 60 * 60 * 1000);
+    const revealDate = new Date(now.getTime() + DEMO_EVENT.reveal_hours * 60 * 60 * 1000);
     const expiresAt = new Date(revealDate);
-    expiresAt.setDate(expiresAt.getDate() + 14);
+    expiresAt.setDate(expiresAt.getDate() + TIER_EXPIRY_DAYS[DEMO_EVENT.tier]);
     const id = crypto.randomUUID();
     const { error } = await supabase.from('events').insert({
       id,
       host_id: user?.id,
-      name: 'Demo Event',
+      name: DEMO_EVENT.name,
       date: today,
-      photos_per_guest: 5,
+      photos_per_guest: DEMO_EVENT.photos_per_guest,
       reveal_time: revealDate.toISOString(),
       is_public: true,
       is_demo: true,
-      tier: 'classic',
+      tier: DEMO_EVENT.tier,
       archived: false,
       archive_expires_at: null,
       expires_at: expiresAt.toISOString(),
     });
     if (error) { alert('Demo event creation failed: ' + error.message); return; }
-    setEvent({ id, name: 'Demo Event', date: today, photos: 5, revealDate, isPublic: true, isDemo: true, tier: 'classic', approvedAt: null, shotsTaken: [], guests: [] });
+    setEvent({ id, name: DEMO_EVENT.name, date: today, photos: DEMO_EVENT.photos_per_guest, revealDate, isPublic: true, isDemo: true, tier: DEMO_EVENT.tier, approvedAt: null, shotsTaken: [], guests: [] });
     setView('host-dashboard');
   };
   const handleApprove = (approvedAt) => { setEvent(e => ({ ...e, approvedAt })); };
@@ -1675,8 +1750,8 @@ export default function App() {
       });
       const { url, error } = await response.json();
       if (error) throw new Error(error);
-      sessionStorage.setItem('archiveReturnTier', initialTier ?? '');
-      sessionStorage.setItem('archiveReturnPhotos', String(initialPhotos ?? ''));
+      sessionStorage.setItem(STORAGE_KEYS.ARCHIVE_TIER, initialTier ?? '');
+      sessionStorage.setItem(STORAGE_KEYS.ARCHIVE_PHOTOS, String(initialPhotos ?? ''));
       window.location.href = url;
     } catch (err) {
       console.error('Archive checkout error:', err);
@@ -1753,7 +1828,7 @@ export default function App() {
                     <div className="card" style={{ marginBottom: 16, borderLeft: `3px solid ${COLORS.accent}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                         <div>
-                          <div className="card-title" style={{ marginBottom: 4 }}>Add Archive — €15/yr</div>
+                          <div className="card-title" style={{ marginBottom: 4 }}>Add Archive — {ARCHIVE_PRICE_DISPLAY}</div>
                           <div style={{ fontSize: 11, color: COLORS.muted }}>Keep your album forever. Cancel anytime.</div>
                         </div>
                         <button
@@ -1774,8 +1849,8 @@ export default function App() {
               )}
               {view === "host-dashboard" && (
                 event
-                  ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
-                  : <HostDashboardEmpty onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
+                  ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
+                  : <HostDashboardEmpty onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
               )}
               {view === "host-album" && event && (
                 <AlbumView event={event} onBack={() => setView("host-dashboard")} onApprove={handleApprove} />
