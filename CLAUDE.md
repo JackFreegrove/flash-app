@@ -89,27 +89,20 @@ STRIPE_PRICE_VENUE_PARTNER, STRIPE_PRICE_ARCHIVE
   - Timezone fix — reveal date parsed in local time not UTC
   - Auth crash fix — getSession uses optional chaining
   - QR download blob URL leak fixed
+  Privacy Policy + T&Cs page (/legal route)
 
 ### PENDING BUILD TASKS (priority order)
 1. Connect EventSnapshotCo.com to Vercel (DNS only, no code)
 2. Switch Stripe test → live mode (only after task 1 and 3 complete)
-3. Privacy Policy + T&Cs page (/legal route)
-4. 4. Intermittent event creation bug — investigate and fix (sometimes fails 
-   on Supabase insert during event creation / QR generation)
-5. Album sort/filter feature (chronological vs grouped by taker)
-6. Album view UI refinement + merchandise CTA placeholder at reveal
-7. Transactional email sequence via Resend (6 emails — see business plan)
+3. Album sort/filter feature (chronological vs grouped by taker)
+4. Album view UI refinement + merchandise CTA placeholder at reveal
+5. Transactional email sequence via Resend (6 emails — see business plan)
 8. hello@eventsnapshotco.com setup (after domain connected)
-9. 4. Stripe webhook handler — payment bypass vulnerability (Finding 6) 
-   must be resolved before Stripe goes live. Get explanation from Claude 
-   Code before building.
 5. Connect EventSnapshotCo.com to Vercel (DNS — waiting on father's 
    registrar details)
 6. Switch Stripe test → live mode (only after tasks 4 and 5 complete)
-7. Privacy Policy + T&Cs page (/legal route)
 8. Album sort/filter (chronological vs grouped by taker)
 9. Album view UI refinement + merchandise CTA placeholder
-10. Transactional email sequence via Resend (6 emails)
 11. hello@eventsnapshotco.com (after domain connected)
 12. Landing page (after domain connected and Stripe live)
 
