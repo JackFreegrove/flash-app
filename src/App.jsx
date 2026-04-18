@@ -1336,7 +1336,7 @@ function rowToEvent(data) {
 }
 
 // ── GUEST: Album View ─────────────────────────────────────────────────────────
-function GuestAlbumView({ event }) {
+function GuestAlbumView({ event, guestName }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
@@ -1363,10 +1363,12 @@ function GuestAlbumView({ event }) {
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
+        {guestName && (
+          <div className="guest-sub" style={{ marginBottom: 8 }}>Welcome back, {guestName}</div>
+        )}
         <div className="section-title">{event.name}</div>
-        <div className="section-sub">
+        <div className="guest-sub">
           {new Date(event.revealDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-          {!loading && !fetchError && ` · ${photos.length} photo${photos.length !== 1 ? "s" : ""}`}
         </div>
       </div>
       {loading ? (
@@ -1412,6 +1414,7 @@ export default function App() {
   const [eventNotFound, setEventNotFound] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [initialShots, setInitialShots] = useState(0);
+  const [guestName, setGuestName] = useState(null);
 
   // Legal page deep-links
   useEffect(() => {
@@ -1443,10 +1446,11 @@ export default function App() {
           const fingerprint = `${ev.id}|${deviceId}`;
           const { data: session } = await supabase
             .from('guest_sessions')
-            .select('completed')
+            .select('completed, taker_name')
             .eq('event_id', ev.id)
             .eq('device_fingerprint', fingerprint)
             .maybeSingle();
+          if (session?.completed) setGuestName(session.taker_name);
           setView(!session || session.completed ? "guest-album" : "guest-entry");
           return;
         }
@@ -1592,7 +1596,7 @@ export default function App() {
                 </div>
               )}
               {view === "guest-album" && event && (
-                <GuestAlbumView event={event} />
+                <GuestAlbumView event={event} guestName={guestName} />
               )}
               {view === "guest-entry" && event && (
                 <GuestEntry event={event} onEnter={handleGuestEnter} />
