@@ -1335,6 +1335,64 @@ function rowToEvent(data) {
   };
 }
 
+// ── GUEST: Album View ─────────────────────────────────────────────────────────
+function GuestAlbumView({ event }) {
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+
+  useEffect(() => {
+    supabase
+      .from('photos')
+      .select('id, taker_id, storage_path, created_at')
+      .eq('event_id', event.id)
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          setFetchError("Failed to load photos. Please refresh.");
+        } else if (data) {
+          setPhotos(data.map(row => ({
+            url: supabase.storage.from('photos').getPublicUrl(row.storage_path).data.publicUrl,
+            taker: row.taker_id,
+          })));
+        }
+        setLoading(false);
+      });
+  }, [event.id]);
+
+  return (
+    <div>
+      <div style={{ marginBottom: 32 }}>
+        <div className="section-title">{event.name}</div>
+        <div className="section-sub">
+          {new Date(event.revealDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+          {!loading && !fetchError && ` · ${photos.length} photo${photos.length !== 1 ? "s" : ""}`}
+        </div>
+      </div>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: COLORS.muted, fontSize: 12, letterSpacing: "0.06em" }}>Loading photos…</div>
+      ) : fetchError ? (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: COLORS.danger, fontSize: 12, letterSpacing: "0.06em" }}>{fetchError}</div>
+      ) : photos.length === 0 ? (
+        <div className="album-locked">
+          <div className="lock-icon">📷</div>
+          <div className="lock-title">No photos yet</div>
+          <div className="lock-sub">Check back soon</div>
+        </div>
+      ) : (
+        <div className="album-grid">
+          {photos.map((p, i) => (
+            <div className="album-photo" key={i}>
+              <img src={p.url} alt={`Photo ${i + 1}`} loading="lazy" />
+              <div className="photo-meta">{p.taker} · #{i + 1}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState("pricing");
   const viewRef = useRef("pricing");
@@ -1364,7 +1422,7 @@ export default function App() {
     const eventId = match[1];
     setLoadingEvent(true);
     supabase.from('events').select('*').eq('id', eventId).single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         setLoadingEvent(false);
         if (error || !data) { setEventNotFound(true); return; }
         const ev = rowToEvent(data);
@@ -1372,9 +1430,22 @@ export default function App() {
         const isRevealed = Date.now() > ev.revealDate.getTime();
         if (isRevealed && ev.isPublic && !ev.approvedAt) {
           setView("guest-album-pending");
-        } else {
-          setView("guest-entry");
+          return;
         }
+        if (isRevealed && ev.isPublic && ev.approvedAt) {
+          const deviceId = localStorage.getItem('snapshot_device_id');
+          if (!deviceId) { setView("guest-album"); return; }
+          const fingerprint = `${ev.id}|${deviceId}`;
+          const { data: session } = await supabase
+            .from('guest_sessions')
+            .select('completed')
+            .eq('event_id', ev.id)
+            .eq('device_fingerprint', fingerprint)
+            .maybeSingle();
+          setView(!session || session.completed ? "guest-album" : "guest-entry");
+          return;
+        }
+        setView("guest-entry");
       });
   }, []);
 
@@ -1514,6 +1585,9 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              )}
+              {view === "guest-album" && event && (
+                <GuestAlbumView event={event} />
               )}
               {view === "guest-entry" && event && (
                 <GuestEntry event={event} onEnter={handleGuestEnter} />
