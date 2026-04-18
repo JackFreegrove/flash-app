@@ -21,7 +21,14 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-  const base = req.headers.origin || 'https://flash-app-gamma.vercel.app';
+  const ALLOWED_ORIGINS = new Set([
+    'https://flash-app-gamma.vercel.app',
+    'https://eventsnapshotco.com',
+    'https://www.eventsnapshotco.com',
+  ]);
+  const base = ALLOWED_ORIGINS.has(req.headers.origin)
+    ? req.headers.origin
+    : 'https://flash-app-gamma.vercel.app';
   const archiveSuffix = withArchive && mode === 'payment' ? '&archive=pending' : '';
 
   try {
