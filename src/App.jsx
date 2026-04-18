@@ -714,6 +714,25 @@ function CreateEvent({ onCreate, initialPhotos, initialTier }) {
   );
 }
 
+// ── HOST: Empty Dashboard ─────────────────────────────────────────────────────
+function HostDashboardEmpty({ onNewEvent, onCreateDemo }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+      <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>📷</div>
+      <div className="section-title">No <em>Active Event</em></div>
+      <div className="section-sub" style={{ marginBottom: 32 }}>Create an event to get started</div>
+      <button className="btn btn-primary" onClick={onNewEvent}>+ New Event</button>
+      {onCreateDemo && (
+        <div style={{ marginTop: 16 }}>
+          <button style={{ background: 'none', border: 'none', color: COLORS.muted, fontSize: 11, cursor: 'pointer', textDecoration: 'underline', letterSpacing: '0.04em' }} onClick={onCreateDemo}>
+            Create Demo Event
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── HOST: QR + Dashboard ──────────────────────────────────────────────────────
 function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
   const revealMs = event.revealDate instanceof Date && !isNaN(event.revealDate) ? event.revealDate.getTime() : Infinity;
@@ -1567,7 +1586,7 @@ export default function App() {
   const activeTab = view === "guest-entry" || view === "guest-camera" ? "guest" : "host";
 
   const switchTab = (tab) => {
-    if (tab === "host") setView(event ? "host-dashboard" : "pricing");
+    if (tab === "host") setView(user ? "host-dashboard" : "pricing");
     else if (event) setView("guest-entry");
   };
 
@@ -1620,8 +1639,10 @@ export default function App() {
               {view === "privacy" && <PrivacyPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
               {view === "terms" && <TermsPage onBack={() => { window.history.pushState({}, '', '/'); setView("pricing"); }} />}
               {view === "host-create" && <CreateEvent onCreate={handleCreate} initialPhotos={initialPhotos} initialTier={initialTier} />}
-              {view === "host-dashboard" && event && (
-                <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
+              {view === "host-dashboard" && (
+                event
+                  ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
+                  : <HostDashboardEmpty onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === 'eventsnapshotco@gmail.com' ? handleCreateDemo : undefined} />
               )}
               {view === "host-album" && event && (
                 <AlbumView event={event} onBack={() => setView("host-dashboard")} onApprove={handleApprove} />
