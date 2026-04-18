@@ -1006,9 +1006,11 @@ function EmailCapture({ sessionId }) {
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email.trim() || saving) return;
+    const trimmed = email.trim();
+    if (!trimmed || saving) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
     setSaving(true);
-    await supabase.from('guest_sessions').update({ email: email.trim() }).eq('id', sessionId);
+    await supabase.from('guest_sessions').update({ email: trimmed }).eq('id', sessionId);
     setSubmitted(true);
     setSaving(false);
   };
@@ -1027,6 +1029,7 @@ function EmailCapture({ sessionId }) {
           type="email"
           placeholder="your@email.com"
           value={email}
+          maxLength={254}
           onChange={e => setEmail(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           style={{
@@ -1486,6 +1489,8 @@ export default function App() {
     const match = window.location.pathname.match(/^\/event\/([^/]+)$/);
     if (!match) return;
     const eventId = match[1];
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(eventId)) { setEventNotFound(true); return; }
     setLoadingEvent(true);
     supabase.from('events').select('*').eq('id', eventId).single()
       .then(async ({ data, error }) => {

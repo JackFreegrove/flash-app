@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export const config = { api: { bodyParser: false } };
 
-const ENTITLEMENT_TIERS = new Set(['momento', 'classic', 'premium', 'venuePartner']);
+const ENTITLEMENT_TIERS = new Set(['momento', 'classic', 'premium']);
 
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
