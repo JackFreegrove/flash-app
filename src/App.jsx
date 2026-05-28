@@ -1202,7 +1202,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     source.toBlob(async (blob) => {
       if (!blob) return;
       setUploading(true);
-      const folderName = `${sanitiseName(event.name)} [${event.id.slice(0, 8)}]`;
+      const folderName = `${sanitiseName(event.name)} ${event.id.slice(0, 8)}`;
       const fileName = `${sanitiseName(takerId)} ${shots.length + 1}.jpg`;
       const path = `${folderName}/${fileName}`;
       let { error: uploadError } = await supabase.storage
