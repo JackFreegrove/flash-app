@@ -60,11 +60,6 @@ const DEMO_EVENT = {
   reveal_hours: 1,
 };
 
-const NAV_TABS = [
-  { id: "host", label: "Host View" },
-  { id: "guest", label: "Guest View" },
-];
-
 // taker_name in the photos table stores a guest display name string (e.g. "Uncle Dave"),
 // mirroring guest_sessions.taker_name. It is not a foreign key ID.
 const sanitiseName = (str) => str.replace(/[^a-zA-Z0-9 \-_]/g, '').trim();
@@ -108,19 +103,6 @@ const css = `
     font-size: 22px; font-weight: 300; letter-spacing: 0.05em;
   }
   .nav-logo span { font-style: italic; }
-  .nav-tabs { display: flex; gap: 4px; }
-  .nav-tab {
-    padding: 6px 16px; border: 1px solid transparent; border-radius: 2px;
-    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
-    text-transform: uppercase; cursor: pointer; background: none;
-    color: ${COLORS.muted}; transition: all 0.2s;
-  }
-  .nav-tab.active {
-    border-color: ${COLORS.accent}; color: ${COLORS.accent};
-    background: ${COLORS.surface};
-  }
-  .nav-tab:hover:not(.active) { color: ${COLORS.text}; }
-
   /* MAIN */
   .main { flex: 1; padding: 48px 32px; max-width: 900px; margin: 0 auto; width: 100%; }
 
@@ -538,15 +520,21 @@ function PricingPage({ onSelect, onNavToTerms }) {
   const [checkoutError, setCheckoutError] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsPrompt, setShowTermsPrompt] = useState(false);
+  const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [showWaiverPrompt, setShowWaiverPrompt] = useState(false);
   const [archiveChecked, setArchiveChecked] = useState({ momento: false, classic: false });
   const termsRef = useRef(null);
+  const waiverRef = useRef(null);
 
   const handleCheckout = async (priceId, tier, withArchive = false) => {
     if (!termsAccepted) {
-      // Option A: highlight checkbox and show inline message.
-      // To switch to Option C (modal), replace these two lines with: setShowTermsPrompt(true); return;
       setShowTermsPrompt(true);
       termsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (!waiverAccepted) {
+      setShowWaiverPrompt(true);
+      waiverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     const { data } = await supabase.auth.getSession();
@@ -576,6 +564,11 @@ function PricingPage({ onSelect, onNavToTerms }) {
   const handleTermsChange = (checked) => {
     setTermsAccepted(checked);
     if (checked) setShowTermsPrompt(false);
+  };
+
+  const handleWaiverChange = (checked) => {
+    setWaiverAccepted(checked);
+    if (checked) setShowWaiverPrompt(false);
   };
 
   const topTiers = TIER_DISPLAY_DATA.filter(t => t.key !== 'premium');
@@ -639,6 +632,31 @@ function PricingPage({ onSelect, onNavToTerms }) {
           {showTermsPrompt && (
             <div style={{ color: COLORS.danger, fontSize: 10, marginTop: 6, letterSpacing: '0.04em' }}>
               Please accept the Terms &amp; Conditions and Privacy Policy to continue.
+            </div>
+          )}
+        </div>
+      </div>
+      <div
+        ref={waiverRef}
+        className="terms-check-row"
+        style={{
+          marginBottom: 24,
+          border: showWaiverPrompt ? `1px solid ${COLORS.danger}` : `1px solid ${COLORS.border}`,
+          background: COLORS.surface,
+          transition: 'border-color 0.2s',
+        }}
+      >
+        <input type="checkbox" id="waiver-accept" checked={waiverAccepted} onChange={e => handleWaiverChange(e.target.checked)} />
+        <div>
+          <label htmlFor="waiver-accept" style={{ fontWeight: 500 }}>
+            I request immediate access to the Snapshot Co service and understand that by creating my event I waive my 14-day right of withdrawal.
+          </label>
+          <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 4, lineHeight: 1.5 }}>
+            Under EU consumer law you have a right to withdraw within 14 days of purchase. By ticking this box you expressly waive that right and request the service begins immediately. See Section 5 of our <a onClick={onNavToTerms}>Terms &amp; Conditions</a>.
+          </div>
+          {showWaiverPrompt && (
+            <div style={{ color: COLORS.danger, fontSize: 10, marginTop: 6, letterSpacing: '0.04em' }}>
+              You must confirm your withdrawal waiver to proceed with payment.
             </div>
           )}
         </div>
@@ -1804,29 +1822,16 @@ export default function App() {
   };
   const handleGuestEnter = useCallback((name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); }, []);
 
-  const activeTab = view === "guest-entry" || view === "guest-camera" ? "guest" : "host";
-
-  const switchTab = useCallback((tab) => {
-    if (tab === "host") setView(user ? "host-dashboard" : "pricing");
-    else if (event) setView("guest-entry");
-  }, [user, event]);
-
   return (
     <>
       <style>{css}</style>
       <div className="app">
         <nav className="nav">
           <img src="/logo.svg" alt="Snapshot Co" style={{height: '40px'}} />
-          <div className="nav-tabs">
-            {NAV_TABS.map(t => (
-              <button key={t.id} className={`nav-tab ${activeTab === t.id ? "active" : ""}`} onClick={() => switchTab(t.id)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {user && (
-            <button className="btn btn-outline btn-sm" onClick={handleSignOut}>Sign Out</button>
-          )}
+          {user
+            ? <button className="btn btn-outline btn-sm" onClick={handleSignOut}>Sign Out</button>
+            : <button className="btn btn-outline btn-sm" onClick={() => setView("login")}>Sign In</button>
+          }
         </nav>
 
         <main className="main">

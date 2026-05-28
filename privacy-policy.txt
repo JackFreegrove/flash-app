@@ -4,18 +4,28 @@
 
 ## 1. Who We Are
 
-Snapshot Co (eventsnapshotco.com) is operated by Jack Freegrove, Ireland.
+Snapshot Co (eventsnapshotco.com) is operated by Jack Freegrove.
 
-Contact: jack@eventsnapshotco.com
+**Address:** 19 Ramstown Grove, Gorey, Co. Wexford, Ireland
 
-## 2. What Data We Collect
+**Data Protection Officer:** Jack Freegrove
+**DPO Contact:** jack@eventsnapshotco.com
 
-We collect:
+## 2. What Data We Collect and Our Lawful Basis
+
+We collect the following personal data. The lawful basis under GDPR Article 6 for each category is noted below.
 
 - **Account data:** email address and encrypted password when you register
+  *Lawful basis: Performance of a contract — necessary to create and manage your account.*
+
 - **Event data:** event name, date, guest names/nicknames, and photos taken at your event
+  *Lawful basis: Performance of a contract — necessary to deliver the Snapshot Co service you have purchased.*
+
 - **Payment data:** processed securely by Stripe — we do not store card details
+  *Lawful basis: Performance of a contract and compliance with a legal obligation (financial record-keeping under Irish tax law).*
+
 - **Usage data:** browser type, device type, and IP address for security and diagnostics
+  *Lawful basis: Legitimate interests — we have a legitimate interest in maintaining the security and performance of our service, which is not overridden by your privacy interests.*
 
 ## 3. How We Use Your Data
 
@@ -50,7 +60,19 @@ We share data only with:
 
 All third-party providers are GDPR-compliant and process data under appropriate data processing agreements.
 
-## 6. Your Rights (GDPR)
+## 6. GDPR Principles
+
+We process personal data in accordance with the seven principles set out in Article 5 of the GDPR:
+
+1. **Lawfulness, fairness and transparency** — We process data lawfully, fairly, and in a transparent manner as described in this policy.
+2. **Purpose limitation** — Data is collected for specified, explicit, and legitimate purposes and is not processed in a manner incompatible with those purposes.
+3. **Data minimisation** — We collect only data that is adequate, relevant, and limited to what is necessary in relation to the purposes for which it is processed.
+4. **Accuracy** — We take reasonable steps to ensure that personal data is accurate and, where necessary, kept up to date.
+5. **Storage limitation** — Data is kept in a form that permits identification of individuals for no longer than is necessary for the purposes for which it is processed.
+6. **Integrity and confidentiality** — We process data in a manner that ensures appropriate security using technical and organisational measures against unauthorised or unlawful processing and against accidental loss, destruction, or damage.
+7. **Accountability** — As data controller, we take responsibility for and are able to demonstrate compliance with these principles.
+
+## 7. Your Rights (GDPR)
 
 Under GDPR, you have the right to:
 
@@ -58,24 +80,24 @@ Under GDPR, you have the right to:
 - **Correct** inaccurate data
 - **Delete** your account and associated data
 - **Restrict** processing of your data
-- **Data portability** — receive a copy of your data
+- **Data portability** — receive a copy of your data in a structured, commonly used format
 - **Object** to processing based on legitimate interests
 
 To exercise any of these rights, email: jack@eventsnapshotco.com
 
 We will respond within 30 days.
 
-## 7. Data Retention
+## 8. Data Retention
 
 - Account data: retained while your account is active, deleted within 30 days of account deletion request
 - Event photos: deleted after album expiry (5, 14, or 60 days depending on tier) unless archived
 - Payment records: retained for 7 years for tax compliance
 
-## 8. Cookies
+## 9. Cookies
 
 We use only essential cookies required for authentication and session management. We do not use tracking or advertising cookies.
 
-## 9. Security
+## 10. Security
 
 We use industry-standard security measures including:
 
@@ -84,17 +106,19 @@ We use industry-standard security measures including:
 - Secure, hashed password storage via Supabase Auth
 - Payment data handled entirely by Stripe
 
-## 10. Children
+## 11. Children
 
 Our service is not intended for users under 18. We do not knowingly collect data from minors.
 
-## 11. Changes to This Policy
+## 12. Changes to This Policy
 
 We may update this policy. Material changes will be communicated by email or a notice on the website.
 
-## 12. Contact and Complaints
+## 13. Contact and Complaints
 
+**Data Protection Officer:** Jack Freegrove
 **Email:** jack@eventsnapshotco.com
+**Address:** 19 Ramstown Grove, Gorey, Co. Wexford, Ireland
 
 If you are not satisfied with our response, you may lodge a complaint with the Irish Data Protection Commission: dataprotection.ie
 
