@@ -1141,7 +1141,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   const streamRef = useRef(null);
   const shotsRef = useRef([]);
   const [facingMode, setFacingMode] = useState("environment");
-  const [permDenied, setPermDenied] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [shots, setShots] = useState(() =>
     Array.from({ length: initialShots }, () => ({ url: null, taker: takerId, time: 0 }))
   );
@@ -1170,7 +1170,13 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
         if (videoRef.current) videoRef.current.srcObject = stream;
         setSwitching(false);
       })
-      .catch(() => { setPermDenied(true); setSwitching(false); });
+      .catch(err => {
+        const isPermission = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+        setCameraError(isPermission
+          ? "Please allow camera access in your browser settings to take photos."
+          : "Camera unavailable. Try opening this page in a different browser.");
+        setSwitching(false);
+      });
 
     return () => {
       active = false;
@@ -1292,13 +1298,13 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     );
   }
 
-  if (permDenied) {
+  if (cameraError) {
     return (
       <div className="guest-wrap">
         <div className="perm-wrap">
           <div className="perm-icon">📷</div>
-          <div className="perm-title">Camera access needed</div>
-          <div className="perm-sub">Please allow camera access in your browser settings to take photos.</div>
+          <div className="perm-title">Camera unavailable</div>
+          <div className="perm-sub">{cameraError}</div>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>Try Again</button>
         </div>
       </div>
