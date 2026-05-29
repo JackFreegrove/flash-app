@@ -1623,6 +1623,7 @@ export default function App() {
   const [pricingError, setPricingError] = useState("");
   const [paymentMsg, setPaymentMsg] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
   const [archiveActive, setArchiveActive] = useState(false);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
@@ -1841,6 +1842,7 @@ export default function App() {
   const handleApprove = useCallback((approvedAt) => { setEvent(e => ({ ...e, approvedAt })); }, []);
 
   const handleArchiveCheckout = async () => {
+    setArchiveError("");
     const { data } = await supabase.auth.getSession();
     if (!data?.session) return;
     try {
@@ -1856,6 +1858,7 @@ export default function App() {
       window.location.href = url;
     } catch (err) {
       console.error('Archive checkout error:', err);
+      setArchiveError("Checkout failed. Please try again.");
     }
   };
   const handleGuestEnter = useCallback((name, sid, shots) => { setTakerId(name); setSessionId(sid); setInitialShots(shots); setView("guest-camera"); }, []);
@@ -1923,6 +1926,11 @@ export default function App() {
                           Add Archive →
                         </button>
                       </div>
+                      {archiveError && (
+                        <div style={{ fontSize: 11, color: COLORS.danger, marginTop: 10, letterSpacing: '0.04em' }}>
+                          {archiveError}
+                        </div>
+                      )}
                       <div style={{ marginTop: 10, textAlign: 'right' }}>
                         <a style={{ fontSize: 11, color: COLORS.muted, cursor: 'pointer' }} onClick={() => setPendingArchiveUpsell(false)}>No thanks</a>
                       </div>
