@@ -1603,6 +1603,7 @@ export default function App() {
   const [initialPhotos, setInitialPhotos] = useState(null);
   const [initialTier, setInitialTier] = useState(null);
   const [pricingError, setPricingError] = useState("");
+  const [paymentMsg, setPaymentMsg] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
   const [archiveActive, setArchiveActive] = useState(false);
   const [verifyingPayment, setVerifyingPayment] = useState(false);
@@ -1720,8 +1721,8 @@ export default function App() {
       } else {
         window.history.replaceState({}, "", window.location.pathname);
         setVerifyingPayment(false);
-        setPricingError("Payment received — it may take a moment to verify. Please refresh the page or contact support.");
-        setView("pricing");
+        setPaymentMsg("Payment received — your event credit is ready. Click \"+ New Event\" below to create your event.");
+        setView("host-dashboard");
       }
     };
 
@@ -1775,6 +1776,25 @@ export default function App() {
     setEvent(ev);
     setView("host-dashboard");
   }, []);
+  const handleNewEvent = useCallback(async () => {
+    setPaymentMsg("");
+    if (!user) { setView("pricing"); return; }
+    const { data: entitlement } = await supabase
+      .from('entitlements')
+      .select('id, tier')
+      .eq('user_id', user.id)
+      .eq('used', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (entitlement) {
+      setInitialPhotos(TIER_PHOTOS[entitlement.tier] ?? null);
+      setInitialTier(entitlement.tier);
+      setView("host-create");
+    } else {
+      setView("pricing");
+    }
+  }, [user]);
   const handleCreateDemo = async () => {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
@@ -1894,9 +1914,17 @@ export default function App() {
                 </>
               )}
               {view === "host-dashboard" && (
-                event
-                  ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
-                  : <HostDashboardEmpty onNewEvent={() => setView("pricing")} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
+                <>
+                  {paymentMsg && (
+                    <div style={{ color: COLORS.success, fontSize: 11, marginBottom: 16, textAlign: 'center', letterSpacing: '0.04em', padding: '10px 16px', background: '#F0FFF4', border: `1px solid ${COLORS.success}`, borderRadius: 2 }}>
+                      {paymentMsg}
+                    </div>
+                  )}
+                  {event
+                    ? <HostDashboard event={event} onViewAlbum={() => setView("host-album")} onNewEvent={handleNewEvent} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
+                    : <HostDashboardEmpty onNewEvent={handleNewEvent} onCreateDemo={user?.email === ADMIN_EMAIL ? handleCreateDemo : undefined} />
+                  }
+                </>
               )}
               {view === "host-album" && event && (
                 <AlbumView event={event} onBack={() => setView("host-dashboard")} onApprove={handleApprove} />
