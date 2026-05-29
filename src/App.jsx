@@ -832,6 +832,7 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
   const [copied, setCopied] = useState(false);
   const [photoCount, setPhotoCount] = useState(0);
   const [guestCount, setGuestCount] = useState(0);
+  const [qrError, setQrError] = useState("");
 
   useEffect(() => {
     supabase.from('photos').select('id').eq('event_id', event.id)
@@ -847,32 +848,38 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
   }, [event.id]);
 
   const downloadQR = () => {
-    const svg = qrRef.current?.querySelector('svg');
-    if (!svg) return;
-    const serialized = new XMLSerializer().serializeToString(svg);
-    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = QR_CANVAS_SIZE;
-      canvas.height = QR_CANVAS_SIZE;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
-      ctx.drawImage(img, 0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
-      URL.revokeObjectURL(url);
-      canvas.toBlob(pngBlob => {
-        const blobUrl = URL.createObjectURL(pngBlob);
-        const a = document.createElement('a');
-        a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
-        a.href = blobUrl;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-      });
-    };
-    img.onerror = () => URL.revokeObjectURL(url);
-    img.src = url;
+    setQrError("");
+    try {
+      const svg = qrRef.current?.querySelector('svg');
+      if (!svg) { setQrError("QR code not ready. Please try again."); return; }
+      const serialized = new XMLSerializer().serializeToString(svg);
+      const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = QR_CANVAS_SIZE;
+        canvas.height = QR_CANVAS_SIZE;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
+        ctx.drawImage(img, 0, 0, QR_CANVAS_SIZE, QR_CANVAS_SIZE);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(pngBlob => {
+          if (!pngBlob) { setQrError("Download failed. Please try again."); return; }
+          const blobUrl = URL.createObjectURL(pngBlob);
+          const a = document.createElement('a');
+          a.download = `${event.name.replace(/\s+/g, '-')}-qr.png`;
+          a.href = blobUrl;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); setQrError("Download failed. Please try again."); };
+      img.src = url;
+    } catch {
+      setQrError("Download failed. Please try again.");
+    }
   };
 
   const copyLink = () => {
@@ -907,6 +914,11 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
           <button className="btn btn-outline btn-sm" onClick={downloadQR}>Download QR</button>
           <button className="btn btn-outline btn-sm" onClick={copyLink}>{copied ? "Copied!" : "Copy Link"}</button>
         </div>
+        {qrError && (
+          <div style={{marginTop:10, fontSize:11, color:COLORS.danger, textAlign:"center", letterSpacing:"0.04em"}}>
+            {qrError}
+          </div>
+        )}
         <div className="qr-stats">
           <div><div className="qr-stat-val">{guestCount}</div><div className="qr-stat-lbl">Guests</div></div>
           <div><div className="qr-stat-val">{photoCount}</div><div className="qr-stat-lbl">Photos</div></div>
