@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 const VALID_PRICES = {
   price_1TME3URoyXRpjOGpiodxnPkb: { tier: 'momento', mode: 'payment' },
@@ -19,7 +20,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { priceId, userId, withArchive } = req.body;
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorised' });
+  }
+
+  const supabase = createClient(
+    process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ error: 'Unauthorised' });
+  }
+
+  const { priceId, withArchive } = req.body;
   const entry = VALID_PRICES[priceId];
   if (!entry) {
     return res.status(400).json({ error: 'Invalid price' });
@@ -40,7 +55,7 @@ export default async function handler(req, res) {
       mode,
       success_url: `${base}?success=true&tier=${tier}${archiveSuffix}`,
       cancel_url: `${base}?cancelled=true`,
-      metadata: { user_id: userId ?? '', tier },
+      metadata: { user_id: user.id, tier },
     });
 
     res.status(200).json({ url: session.url });

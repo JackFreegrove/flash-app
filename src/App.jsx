@@ -544,10 +544,12 @@ function PricingPage({ onSelect, onNavToTerms }) {
     try {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`,
+        },
         body: JSON.stringify({
           priceId,
-          userId: data?.session?.user?.id ?? '',
           withArchive: withArchive ?? false,
         }),
       });
@@ -1858,8 +1860,11 @@ export default function App() {
     try {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: PRICES.archive, userId: data.session.user.id, withArchive: false }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`,
+        },
+        body: JSON.stringify({ priceId: PRICES.archive, withArchive: false }),
       });
       const { url, error } = await response.json();
       if (error) throw new Error(error);
