@@ -1157,7 +1157,23 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   const [switching, setSwitching] = useState(false);
   const [done, setDone] = useState(initialShots >= event.photos);
   const [shotError, setShotError] = useState("");
+  const [revealPassed, setRevealPassed] = useState(() => Date.now() > event.revealDate.getTime());
   const maxShots = event.photos;
+
+  // Proactive reveal check: if the album reveals while the guest is on the camera
+  // page, lock the shutter and surface a message without requiring a tap first.
+  // Complements the reactive check at the top of takeShot (which fires on tap).
+  useEffect(() => {
+    if (revealPassed) return;
+    const id = setInterval(() => {
+      if (Date.now() > event.revealDate.getTime()) {
+        setRevealPassed(true);
+        setShotError("The album has revealed — the camera is now closed.");
+        clearInterval(id);
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [event.revealDate, revealPassed]);
 
   // Restart stream whenever facingMode changes
   useEffect(() => {
@@ -1357,8 +1373,8 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
             </button>
           </div>
           <div className="camera-bottom">
-            <button className="shutter" aria-label="Take photo" onClick={takeShot} disabled={shots.length >= maxShots || uploading || switching}>
-              <div className="shutter-inner" style={(uploading || switching) ? { opacity: 0.4 } : {}} />
+            <button className="shutter" aria-label="Take photo" onClick={takeShot} disabled={shots.length >= maxShots || uploading || switching || revealPassed}>
+              <div className="shutter-inner" style={(uploading || switching || revealPassed) ? { opacity: 0.4 } : {}} />
             </button>
           </div>
         </div>
