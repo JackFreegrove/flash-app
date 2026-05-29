@@ -722,7 +722,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
     }
     setSaving(false);
     if (error) { setSaveError(error.code === '23514' ? "No valid purchase found for this tier. Please complete payment before creating an event." : error.message); return; }
-    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null, shotsTaken: [], guests: [] });
+    onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null });
   };
 
   return (
@@ -1227,7 +1227,8 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       if (!blob) return;
       setUploading(true);
       const folderName = event.id;
-      const fileName = `${sanitiseName(takerId)} ${shots.length + 1}.jpg`;
+      const safeName = sanitiseName(takerId) || 'guest';
+      const fileName = `${safeName} ${shots.length + 1}.jpg`;
       const path = `${folderName}/${fileName}`;
       let { error: uploadError } = await supabase.storage
         .from('photos')
@@ -1542,8 +1543,6 @@ function rowToEvent(data) {
     isDemo: data.is_demo ?? false,
     tier: data.tier,
     approvedAt: data.approved_at ? new Date(data.approved_at) : null,
-    shotsTaken: [],
-    guests: [],
   };
 }
 
@@ -1630,7 +1629,12 @@ export default function App() {
   const [paymentMsg, setPaymentMsg] = useState("");
   const [pendingArchiveUpsell, setPendingArchiveUpsell] = useState(false);
   const [archiveError, setArchiveError] = useState("");
+  // TODO (Phase 2): archiveActive is not derived from DB on load — it is only set by the
+  // payment redirect flow, so it resets to false on every page refresh regardless of whether
+  // the host has a live archive subscription. Fixing this requires a Stripe subscription
+  // status check (or a mirror column on the events table) during the auth restore effect.
   const [archiveActive, setArchiveActive] = useState(false);
+  const [demoError, setDemoError] = useState("");
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(false);
   const [eventNotFound, setEventNotFound] = useState(false);
@@ -1841,8 +1845,8 @@ export default function App() {
       archive_expires_at: null,
       expires_at: expiresAt.toISOString(),
     });
-    if (error) { alert('Demo event creation failed: ' + error.message); return; }
-    setEvent({ id, name: DEMO_EVENT.name, date: today, photos: DEMO_EVENT.photos_per_guest, revealDate, isPublic: true, isDemo: true, tier: DEMO_EVENT.tier, approvedAt: null, shotsTaken: [], guests: [] });
+    if (error) { setDemoError('Demo event creation failed: ' + error.message); return; }
+    setEvent({ id, name: DEMO_EVENT.name, date: today, photos: DEMO_EVENT.photos_per_guest, revealDate, isPublic: true, isDemo: true, tier: DEMO_EVENT.tier, approvedAt: null });
     setView('host-dashboard');
   };
   const handleApprove = useCallback((approvedAt) => { setEvent(e => ({ ...e, approvedAt })); }, []);
@@ -1950,6 +1954,11 @@ export default function App() {
                   {paymentMsg && (
                     <div style={{ color: COLORS.success, fontSize: 11, marginBottom: 16, textAlign: 'center', letterSpacing: '0.04em', padding: '10px 16px', background: '#F0FFF4', border: `1px solid ${COLORS.success}`, borderRadius: 2 }}>
                       {paymentMsg}
+                    </div>
+                  )}
+                  {demoError && (
+                    <div style={{ color: COLORS.danger, fontSize: 11, marginBottom: 16, textAlign: 'center', letterSpacing: '0.04em', padding: '10px 16px', background: '#FFF5F5', border: `1px solid ${COLORS.danger}`, borderRadius: 2 }}>
+                      {demoError}
                     </div>
                   )}
                   {event
