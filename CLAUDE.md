@@ -1,5 +1,5 @@
 # Snapshot Co — Project Memory for Claude Code
-# Last updated: April 2026 (session 4).
+# Last updated: May 2026 (session 5 — forensic audit complete).
 
 ## WHAT THIS PRODUCT IS
 Browser-based SaaS recreating the disposable camera experience at weddings and events.
@@ -32,6 +32,7 @@ No app download required. The constraints are the product.
 8. ALWAYS explain what you are about to do in plain English before writing code
 9. ALWAYS make one change at a time — confirm it works before proceeding
 10. ALWAYS match existing code style and naming conventions
+11. NEVER split App.jsx into multiple files
 
 ## PRICING (never change without instruction)
 | Tier    | Price | Guests    | Photos  | Album Life | Archive       |
@@ -51,7 +52,7 @@ Venue licensing (direct sales only — NOT on consumer pricing page):
 - premium:  price_1TME4QRoyXRpjOGpfiWHhcmB
 - archive:  price_1TFzi0RoyXRpjOGpfO3J11AL
 
-## DATABASE SCHEMA (actual — verified April 2026)
+## DATABASE SCHEMA (actual — verified May 2026)
 ```sql
 events      (id UUID PK, host_id UUID FK→auth.users, name TEXT, date DATE,
              photos_per_guest INT, reveal_time TIMESTAMPTZ, is_public BOOL DEFAULT false,
@@ -59,7 +60,7 @@ events      (id UUID PK, host_id UUID FK→auth.users, name TEXT, date DATE,
              expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now(),
              approved_at TIMESTAMPTZ nullable, is_demo BOOL DEFAULT false)
 
-photos      (id UUID PK, event_id UUID FK, guest_id UUID FK nullable,
+photos      (id UUID PK, event_id UUID FK,
              taker_name TEXT CHECK(len≤60),  -- stores display name string, NOT a UUID
              storage_path TEXT, created_at TIMESTAMPTZ DEFAULT now())
 
@@ -70,17 +71,19 @@ guest_sessions (id UUID PK, event_id UUID FK, device_fingerprint TEXT,
 
 entitlements   (id UUID PK, user_id UUID, tier TEXT, used BOOL DEFAULT false,
                 created_at TIMESTAMPTZ DEFAULT now())
-
-guests         (id UUID PK, event_id UUID FK, taker_id TEXT, shots_taken INT DEFAULT 0,
-                created_at TIMESTAMPTZ) -- legacy table, 0 rows, not actively used
 ```
 
-Storage path format: `{sanitised event name} [{first 8 chars of event UUID}]/{sanitised taker name} {shot number}.jpg`
-e.g. `Sarah James Wedding [a3f8b2c1]/Uncle Dave 3.jpg`
+Dropped in forensic audit: `guests` table (was legacy, 0 rows), `photos.guest_id` column (was unused).
+
+Storage path format: `{event-id}/{sanitised taker name} {shot number}.jpg`
+e.g. `a3f8b2c1-4d2e-…/Uncle Dave 3.jpg`
+If `sanitiseName(takerName)` returns empty (e.g. all-emoji input), `'guest'` is used as fallback.
 
 ## ENVIRONMENT VARIABLES (Vercel + .env.local)
 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY (server only — used by webhook + checkout JWT validation)
 STRIPE_SECRET_KEY (server only — never expose to frontend)
+STRIPE_WEBHOOK_SECRET (server only)
 VITE_STRIPE_PUBLISHABLE_KEY
 STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_ARCHIVE
 
@@ -110,18 +113,26 @@ STRIPE_PRICE_MOMENTO, STRIPE_PRICE_CLASSIC, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_A
 - Host dashboard with guest/photo counts, QR card, approval prompt
 - HostDashboardEmpty shown when no active event
 - Page refresh restores host event state from Supabase
-- Payment polling with exponential backoff (2s, 4s, 6s… up to 5 attempts)
+- Payment polling with linear backoff (2s × attempt, up to 5 attempts)
 - Privacy Policy + T&Cs page (/legal route)
 - Vercel auto-deployment
+- Checkout endpoint validates caller via Supabase JWT (Authorization header checked server-side with service role client — userId no longer trusted from request body)
+- Camera page locks proactively at reveal: 30s interval disables shutter and shows message without requiring a tap first
 
-### PENDING BUILD TASKS (priority order)
-1. Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar details)
-2. Switch Stripe test → live mode (only after task 1 complete)
-3. Album sort/filter feature (chronological vs grouped by taker)
-4. Album view UI refinement + merchandise CTA placeholder at reveal
-5. Transactional email sequence via Resend (6 emails — see business plan)
-6. hello@eventsnapshotco.com setup (after domain connected)
-7. Landing page (after domain connected and Stripe live)
+### PENDING BUILD TASKS
+
+**Infrastructure (blocking)**
+- Connect EventSnapshotCo.com to Vercel (DNS — waiting on registrar transfer)
+- Stripe test → live: DO NOT switch without explicit instruction. Only after DNS connected.
+
+**Feature tasks (ready to build)**
+- Task 7: Download All button (host album view)
+- Task 8: Album sort toggle (chronological vs grouped by taker)
+- Task 9: Merchandise CTA placeholder at reveal
+
+**Blocked**
+- Task 5: Transactional email via Resend — blocked on domain registrar transfer
+- Task 6: 6-email sequence (see business plan) — blocked on Task 5
 
 ### FUTURE ONLY — DO NOT BUILD YET
 - Physical photo album via Prodigi API
