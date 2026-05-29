@@ -1170,6 +1170,10 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   };
 
   const takeShot = useCallback(async () => {
+    if (Date.now() > event.revealDate.getTime()) {
+      setShotError("The album has revealed — no more photos can be added.");
+      return;
+    }
     if (shots.length >= maxShots || flashing || uploading || switching) return;
     setShotError("");
     setFlashing(true);
