@@ -721,7 +721,7 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
       if (error?.code === '23505') error = null;
     }
     setSaving(false);
-    if (error) { setSaveError(error.message); return; }
+    if (error) { setSaveError(error.code === '23514' ? "No valid purchase found for this tier. Please complete payment before creating an event." : error.message); return; }
     onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null, shotsTaken: [], guests: [] });
   };
 
