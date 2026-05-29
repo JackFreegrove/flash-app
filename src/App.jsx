@@ -883,8 +883,10 @@ function HostDashboard({ event, onViewAlbum, onNewEvent, onCreateDemo }) {
   };
 
   const copyLink = () => {
+    setQrError("");
     navigator.clipboard.writeText(`https://eventsnapshotco.com/event/${event.id}`)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => setQrError("Could not copy link — please copy it from the address bar."));
   };
 
   return (
