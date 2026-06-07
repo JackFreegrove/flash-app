@@ -209,7 +209,6 @@ If `sanitiseName(takerName)` returns empty (e.g. all-emoji input), `'guest'` is 
 - Camera page locks proactively at reveal (30s interval, no tap required)
 - Download All button in host album view (zip via fflate)
 - Album sort toggle — chronological vs grouped by photographer
-- Merchandise CTA placeholder at reveal
 
 ### Serverless hardening (7 June 2026)
 - 10s AbortController timeout on `supabase.auth.getUser` in `create-checkout-session.js` (Promise.race + AbortController)
@@ -225,7 +224,6 @@ All emails sent from `hello@eventsnapshotco.com` via Resend. Failures are silent
 | 1 | Purchase confirmation | Stripe webhook `checkout.session.completed` | **Live** — fire-and-forget after entitlement write |
 | 2 | Event created + QR URL | App.jsx `handleCreate` after Supabase insert | **Live** — POST to `/api/send-event-created`, fire-and-forget |
 | 3 | Album reveal | Cron: `reveal_time <= now() AND reveal_notified_at IS NULL` | **Built, dormant** — needs Vercel Pro |
-| 4 | Merch teaser | Same cron tick as Email 3 | **Built, dormant** |
 | 5 | 48h expiry warning | Cron: `expires_at <= now()+48h AND expiry_notified_at IS NULL` | **Built, dormant** |
 | 6 | Archive upsell | Same cron tick as Email 5 (skipped if archive entitlement exists) | **Built, dormant** |
 
@@ -255,7 +253,7 @@ Idempotency: `reveal_notified_at` and `expiry_notified_at` columns on `events` p
 
 ### Future only — do not build yet
 - Physical photo album via Prodigi API
-- Event merchandise (canvas, keyrings, mugs) — placeholder copy exists in Email 4
+- Event merchandise (canvas, keyrings, mugs)
 - Custom branding add-on (€49/event)
 - Venue licensing portal
 
