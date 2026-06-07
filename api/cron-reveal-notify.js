@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from './send-email.js';
-import { albumReveal, merchTeaser } from './email-templates.js';
+import { albumReveal } from './email-templates.js';
 
 const APP_URL = 'https://flash-app-gamma.vercel.app';
 
@@ -43,12 +43,6 @@ export default async function handler(req, res) {
         to: user.email,
         subject: `Your album is ready — ${event.name}`,
         html: albumReveal({ eventName: event.name, albumUrl }),
-      });
-
-      await sendEmail({
-        to: user.email,
-        subject: 'Turn your photos into something permanent',
-        html: merchTeaser({ eventName: event.name, albumUrl }),
       });
 
       const { error: updateError } = await supabase

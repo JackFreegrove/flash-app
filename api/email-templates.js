@@ -96,17 +96,6 @@ export function albumReveal({ eventName, albumUrl }) {
   return shell(`Your album is ready — ${eventName}`, body);
 }
 
-export function merchTeaser({ eventName, albumUrl }) {
-  const body = `
-    ${h1('Turn your photos into something permanent.')}
-    ${p(`The <strong>${eventName}</strong> photos are ready &mdash; and soon you\'ll be able to hold them.`)}
-    ${p('Canvas prints, keyrings, and physical photo albums are on the way. You\'ll be among the first to know when they\'re available.')}
-    ${btn('Back to your album', albumUrl)}
-    ${muted('Nothing to order yet &mdash; this is a preview of what\'s coming.')}
-  `;
-  return shell('Turn your photos into something permanent', body);
-}
-
 export function expiryWarning({ eventName, expiresAt, archiveUrl }) {
   const formatted = expiresAt
     ? new Date(expiresAt).toLocaleString('en-IE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })
