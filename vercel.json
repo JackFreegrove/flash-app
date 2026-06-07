@@ -5,9 +5,5 @@
       "path": "/api/cron-cleanup-storage",
       "schedule": "0 3 * * *"
     }
-  ],
-  "_dormant_crons": [
-    { "path": "/api/cron-reveal-notify", "schedule": "0 * * * *", "note": "Activate on Vercel Pro" },
-    { "path": "/api/cron-expiry-warn",   "schedule": "0 * * * *", "note": "Activate on Vercel Pro" }
   ]
 }
