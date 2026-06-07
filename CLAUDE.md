@@ -224,8 +224,8 @@ All emails sent from `hello@eventsnapshotco.com` via Resend. Failures are silent
 | 1 | Purchase confirmation | Stripe webhook `checkout.session.completed` | **Live** — fire-and-forget after entitlement write |
 | 2 | Event created + QR URL | App.jsx `handleCreate` after Supabase insert | **Live** — POST to `/api/send-event-created`, fire-and-forget |
 | 3 | Album reveal | Cron: `reveal_time <= now() AND reveal_notified_at IS NULL` | **Built, dormant** — needs Vercel Pro |
-| 5 | 48h expiry warning | Cron: `expires_at <= now()+48h AND expiry_notified_at IS NULL` | **Built, dormant** |
-| 6 | Archive upsell | Same cron tick as Email 5 (skipped if archive entitlement exists) | **Built, dormant** |
+| 4 | 48h expiry warning | Cron: `expires_at <= now()+48h AND expiry_notified_at IS NULL` | **Built, dormant** |
+| 5 | Archive upsell | Same cron tick as Email 4 (skipped if archive entitlement exists) | **Built, dormant** |
 
 Idempotency: `reveal_notified_at` and `expiry_notified_at` columns on `events` prevent duplicate sends.
 
@@ -252,8 +252,6 @@ Idempotency: `reveal_notified_at` and `expiry_notified_at` columns on `events` p
 | Transactional email domain auth | hello@eventsnapshotco.com sending via Resend — confirm DKIM/SPF once DNS is live |
 
 ### Future only — do not build yet
-- Physical photo album via Prodigi API
-- Event merchandise (canvas, keyrings, mugs)
 - Custom branding add-on (€49/event)
 - Venue licensing portal
 
