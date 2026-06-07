@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { QRCodeSVG } from 'qrcode.react';
+import { zip } from 'fflate';
 import { supabase } from './supabase';
 import termsRaw from '../terms-conditions.txt?raw';
 import privacyRaw from '../privacy-policy.txt?raw';
@@ -47,7 +48,8 @@ const STORAGE_KEYS = {
 
 const QR_CANVAS_SIZE = 400;
 const VIDEO_FALLBACK = { width: 400, height: 533 }; // 3:4 fallback when camera hasn't reported dimensions
-const JPEG_QUALITY = 0.85;
+const MAX_UPLOAD_BYTES = 800 * 1024;
+const QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55];
 const MAX_PHOTO_DIMENSION = 1200; // long-edge cap before upload — keeps files ~80–150 KB
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GUEST_NAME_MAX_LEN = 60;
@@ -988,6 +990,49 @@ function AlbumView({ event, onBack, onApprove }) {
     setApproving(false);
   };
   const [fetchError, setFetchError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [sortMode, setSortMode] = useState('chrono');
+
+  const handleDownloadAll = async () => {
+    setDownloading(true);
+    try {
+      const entries = await Promise.all(
+        photos.map(async (p, i) => {
+          const res = await fetch(p.url);
+          const buf = await res.arrayBuffer();
+          const idx = String(i + 1).padStart(2, '0');
+          const safeTaker = (p.taker || 'guest').replace(/[^a-z0-9 ]/gi, '').trim() || 'guest';
+          return [`${idx}-${safeTaker}.jpg`, new Uint8Array(buf)];
+        })
+      );
+      const files = Object.fromEntries(entries.map(([name, data]) => [name, [data, { level: 0 }]]));
+      zip(files, (err, data) => {
+        if (!err) {
+          const blob = new Blob([data], { type: 'application/zip' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const safeEvent = event.name.replace(/[^a-z0-9 ]/gi, '').trim() || 'album';
+          a.href = url;
+          a.download = `${safeEvent} Album.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setDownloading(false);
+      });
+    } catch {
+      setDownloading(false);
+    }
+  };
+
+  const grouped = useMemo(() => {
+    if (sortMode !== 'photographer') return null;
+    return photos.reduce((acc, p, i) => {
+      const key = p.taker || 'Unknown';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push({ ...p, globalIndex: i });
+      return acc;
+    }, {});
+  }, [photos, sortMode]);
 
   useEffect(() => {
     if (!revealed) return;
@@ -1039,10 +1084,15 @@ function AlbumView({ event, onBack, onApprove }) {
     <div>
       <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
         <button className="btn btn-outline btn-sm" onClick={onBack}>← Back</button>
-        <div>
+        <div style={{flex:1}}>
           <div className="section-title" style={{marginBottom:0}}>{event.name}</div>
           <div className="section-sub" style={{marginBottom:0}}>{photos.length} photos · {event.isPublic ? "Public" : "Private"}</div>
         </div>
+        {photos.length > 0 && (
+          <button className="btn btn-outline btn-sm" onClick={handleDownloadAll} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download All'}
+          </button>
+        )}
       </div>
 
       {event.isPublic && !localApprovedAt && (
@@ -1076,14 +1126,42 @@ function AlbumView({ event, onBack, onApprove }) {
           <div className="lock-sub">Share the QR code and guests will start filling the album</div>
         </div>
       ) : (
-        <div className="album-grid">
-          {photos.map((p, i) => (
-            <div className="album-photo" key={i}>
-              <img src={p.url} alt={`Photo by ${p.taker}`} loading="lazy" />
-              <div className="photo-meta">{p.taker} · #{i + 1}</div>
+        <>
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            <button
+              className={`btn btn-sm ${sortMode === 'chrono' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setSortMode('chrono')}
+            >Chronological</button>
+            <button
+              className={`btn btn-sm ${sortMode === 'photographer' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setSortMode('photographer')}
+            >By Photographer</button>
+          </div>
+          {sortMode === 'chrono' ? (
+            <div className="album-grid">
+              {photos.map((p, i) => (
+                <div className="album-photo" key={i}>
+                  <img src={p.url} alt={`Photo by ${p.taker}`} loading="lazy" />
+                  <div className="photo-meta">{p.taker} · #{i + 1}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          ) : (
+            Object.entries(grouped).map(([taker, takerPhotos]) => (
+              <div key={taker} style={{marginBottom:32}}>
+                <div className="card-title">{taker}</div>
+                <div className="album-grid">
+                  {takerPhotos.map((p) => (
+                    <div className="album-photo" key={p.globalIndex}>
+                      <img src={p.url} alt={`Photo by ${taker}`} loading="lazy" />
+                      <div className="photo-meta">#{p.globalIndex + 1}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </>
       )}
     </div>
   );
@@ -1241,61 +1319,64 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       source = r;
     }
 
-    source.toBlob(async (blob) => {
-      if (!blob) return;
-      setUploading(true);
-      const folderName = event.id;
-      const safeName = sanitiseName(takerId) || 'guest';
-      const fileName = `${safeName} ${shots.length + 1}.jpg`;
-      const path = `${folderName}/${fileName}`;
-      let { error: uploadError } = await supabase.storage
+    let blob = null;
+    for (const quality of QUALITY_STEPS) {
+      blob = await new Promise(resolve => source.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob || blob.size <= MAX_UPLOAD_BYTES || quality === QUALITY_STEPS[QUALITY_STEPS.length - 1]) break;
+    }
+    if (!blob) return;
+    setUploading(true);
+    const folderName = event.id;
+    const safeName = sanitiseName(takerId) || 'guest';
+    const fileName = `${safeName} ${shots.length + 1}.jpg`;
+    const path = `${folderName}/${fileName}`;
+    let { error: uploadError } = await supabase.storage
+      .from('photos')
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (uploadError) {
+      await new Promise(r => setTimeout(r, 1000));
+      ({ error: uploadError } = await supabase.storage
         .from('photos')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-      if (uploadError) {
-        await new Promise(r => setTimeout(r, 1000));
-        ({ error: uploadError } = await supabase.storage
-          .from('photos')
-          .upload(path, blob, { contentType: 'image/jpeg', upsert: true }));
-      }
-      if (uploadError) {
-        setUploading(false);
-        setShotError("Upload failed. Tap the shutter to try again.");
-        return;
-      }
-      const { error: dbError } = await supabase.from('photos').insert({
-        event_id: event.id,
-        taker_name: takerId,
-        storage_path: path,
-      });
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true }));
+    }
+    if (uploadError) {
       setUploading(false);
+      setShotError("Upload failed. Tap the shutter to try again.");
+      return;
+    }
+    const { error: dbError } = await supabase.from('photos').insert({
+      event_id: event.id,
+      taker_name: takerId,
+      storage_path: path,
+    });
+    setUploading(false);
 
-      if (dbError) {
-        setShotError("Photo uploaded but wasn't recorded. Tap the shutter to try again.");
-        return;
-      }
+    if (dbError) {
+      setShotError("Photo uploaded but wasn't recorded. Tap the shutter to try again.");
+      return;
+    }
 
-      // createObjectURL avoids the blocking toDataURL re-encode; revoked on unmount
-      const url = URL.createObjectURL(blob);
-      const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
-      setShots(newShots);
-      const isComplete = newShots.length >= maxShots;
-      if (sessionId) {
-        const sessionUpdate = { photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) };
-        supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
-          .then(({ error }) => {
-            if (error) {
-              return supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
-                .then(({ error: retryError }) => {
-                  if (retryError) console.error('guest_sessions update failed after retry:', retryError);
-                });
-            }
-          })
-          .catch((err) => console.error('guest_sessions update error:', err));
-      }
-      if (isComplete) {
-        setTimeout(() => setDone(true), TIMINGS.DONE_DELAY_MS);
-      }
-    }, 'image/jpeg', JPEG_QUALITY);
+    // createObjectURL avoids the blocking toDataURL re-encode; revoked on unmount
+    const url = URL.createObjectURL(blob);
+    const newShots = [...shots, { url, taker: takerId, time: Date.now() }];
+    setShots(newShots);
+    const isComplete = newShots.length >= maxShots;
+    if (sessionId) {
+      const sessionUpdate = { photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) };
+      supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+        .then(({ error }) => {
+          if (error) {
+            return supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+              .then(({ error: retryError }) => {
+                if (retryError) console.error('guest_sessions update failed after retry:', retryError);
+              });
+          }
+        })
+        .catch((err) => console.error('guest_sessions update error:', err));
+    }
+    if (isComplete) {
+      setTimeout(() => setDone(true), TIMINGS.DONE_DELAY_MS);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id]);
 
