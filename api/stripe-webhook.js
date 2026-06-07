@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 export const config = { api: { bodyParser: false } };
 
 const ENTITLEMENT_TIERS = new Set(['momento', 'classic', 'premium']);
+const TIMEOUT_MS = 10_000;
 
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -50,14 +51,27 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    const { error } = await supabase.from('entitlements').insert({
-      user_id: userId,
-      tier,
-    });
-
-    if (error) {
-      console.error('Failed to write entitlement:', error);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const { error } = await supabase
+        .from('entitlements')
+        .insert({ user_id: userId, tier })
+        .abortSignal(controller.signal);
+      if (error) {
+        console.error('Failed to write entitlement:', error);
+        return res.status(500).json({ error: 'Database error' });
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.error('Entitlement write timed out for session:', session.id);
+        // Return 200 so Stripe does not retry — entitlement may need manual recovery
+        return res.status(200).json({ received: true });
+      }
+      console.error('Unexpected error writing entitlement:', err.message);
       return res.status(500).json({ error: 'Database error' });
+    } finally {
+      clearTimeout(timer);
     }
   }
 
