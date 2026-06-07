@@ -727,6 +727,15 @@ function CreateEvent({ onCreate, initialPhotos, initialTier, archiveActive, user
     setSaving(false);
     if (error) { setSaveError(error.code === '23514' ? "No valid purchase found for this tier. Please complete payment before creating an event." : error.message); return; }
     onCreate({ id, name: form.name, date: form.date, photos: Number(form.photos), revealDate, isPublic: form.isPublic, tier: initialTier, approvedAt: null });
+    supabase.auth.getUser().then(({ data }) => {
+      const hostEmail = data?.user?.email;
+      if (!hostEmail) return;
+      fetch('/api/send-event-created', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: id, hostEmail, eventName: form.name, eventDate: form.date, revealTime: revealDate.toISOString() }),
+      }).catch(err => console.error('[send-event-created]', err));
+    }).catch(err => console.error('[getUser for email]', err));
   };
 
   return (

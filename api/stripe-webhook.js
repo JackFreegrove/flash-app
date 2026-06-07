@@ -1,10 +1,18 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { sendEmail } from './send-email.js';
+import { purchaseConfirmation } from './email-templates.js';
 
 export const config = { api: { bodyParser: false } };
 
 const ENTITLEMENT_TIERS = new Set(['momento', 'classic', 'premium']);
 const TIMEOUT_MS = 10_000;
+
+const TIER_INFO = {
+  momento: { tierLabel: 'Momento', price: '€59',  photosPerGuest: 3,  albumLife: '5 days'  },
+  classic:  { tierLabel: 'Classic',  price: '€99',  photosPerGuest: 5,  albumLife: '14 days' },
+  premium:  { tierLabel: 'Premium',  price: '€199', photosPerGuest: 10, albumLife: '60 days' },
+};
 
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -72,6 +80,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Database error' });
     } finally {
       clearTimeout(timer);
+    }
+
+    const hostEmail = session.customer_details?.email;
+    if (hostEmail && TIER_INFO[tier]) {
+      sendEmail({
+        to: hostEmail,
+        subject: 'Your Snapshot Co booking is confirmed',
+        html: purchaseConfirmation(TIER_INFO[tier]),
+      }).catch(err => console.error('[stripe-webhook] Email send failed:', err));
     }
   }
 
