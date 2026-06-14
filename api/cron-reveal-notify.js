@@ -58,6 +58,15 @@ export default async function handler(req, res) {
 
       console.log(`[cron-reveal-notify] Processed event ${event.id}`);
       processed++;
+
+      // fire-and-forget analytics — must not affect email delivery
+      try {
+        fetch(`${process.env.VITE_SITE_URL || 'https://eventsnapshotco.com'}/api/record-event-analytics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: event.id }),
+        });
+      } catch (_) {}
     } catch (err) {
       console.error(`[cron-reveal-notify] Unexpected error for event ${event.id}:`, err.message);
       errors++;
