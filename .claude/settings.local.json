@@ -17,7 +17,39 @@
       "Bash(git commit -m ' *)",
       "Bash(git pull *)",
       "Bash(git commit *)",
-      "Bash(awk '/^function GuestCamera/,/^function [A-Z]/ {print NR\": \"$0}' /c/Users/Jack/flash-app/src/App.jsx)"
+      "Bash(awk '/^function GuestCamera/,/^function [A-Z]/ {print NR\": \"$0}' /c/Users/Jack/flash-app/src/App.jsx)",
+      "Bash(npm install *)",
+      "PowerShell(vercel env *)",
+      "Read(//c/Users/Jack/.local/share/com.vercel.cli/**)",
+      "Read(//c/Users/Jack/.vercel/**)",
+      "mcp__vercel__list_deployments",
+      "mcp__vercel__get_deployment",
+      "Skill(run)",
+      "Bash(xargs grep -li \"memory persistence\\\\|security scan\\\\|secret.*scan\\\\|scan.*secret\")",
+      "Bash(echo \"exit: $?\")"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Jack/flash-app/.claude/hooks/security-scan.js"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/Jack/flash-app/.claude/hooks/memory-persist.js"
+          }
+        ]
+      }
     ]
   }
 }
