@@ -11,6 +11,12 @@ Snapshot Co (eventsnapshotco.com) is operated by Jack Freegrove.
 **Data Protection Officer:** Jack Freegrove
 **DPO Contact:** jack@eventsnapshotco.com
 
+## Data Protection Officer
+
+**Name:** Jack Freegrove
+// TODO: Update DPO email to hello@eventsnapshotco.com once Google Workspace is live
+**Email:** eventsnapshotco@gmail.com
+
 ## 2. What Data We Collect and Our Lawful Basis
 
 We collect the following personal data. The lawful basis under GDPR Article 6 for each category is noted below.

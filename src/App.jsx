@@ -359,6 +359,23 @@ const css = `
   .terms-check-row input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; cursor: pointer; width: 14px; height: 14px; }
   .terms-check-row a { color: ${COLORS.text}; text-decoration: underline; cursor: pointer; }
 
+  .nav-actions { display: flex; align-items: center; gap: 12px; }
+
+  /* ANALYTICS */
+  .analytics-loading { padding: 60px 20px; text-align: center; font-size: 12px; color: ${COLORS.muted}; letter-spacing: 0.06em; }
+  .analytics-empty { padding: 60px 20px; text-align: center; font-size: 12px; color: ${COLORS.muted}; letter-spacing: 0.06em; }
+  .analytics-big-num { font-family: 'Cormorant Garamond', serif; font-size: 48px; font-weight: 300; }
+  .analytics-tier-row { margin-bottom: 16px; }
+  .analytics-tier-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .analytics-tier-name { font-size: 12px; }
+  .analytics-tier-count { font-size: 10px; color: ${COLORS.muted}; letter-spacing: 0.04em; }
+  .analytics-bar-track { height: 4px; background: ${COLORS.border}; border-radius: 2px; overflow: hidden; }
+  .analytics-bar-fill { height: 100%; background: ${COLORS.accent}; border-radius: 2px; transition: width 0.4s ease; }
+  .analytics-metric-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid ${COLORS.border}; }
+  .analytics-metric-row:last-child { border-bottom: none; }
+  .analytics-metric-label { font-size: 12px; color: ${COLORS.muted}; }
+  .analytics-metric-value { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 300; }
+
   @media (max-width: 600px) {
     .main { padding: 32px 16px; }
     .form-row { grid-template-columns: 1fr; }
@@ -490,6 +507,7 @@ function renderMarkdown(text) {
     else if (t.startsWith('- ')) { listItems.push(<li key={k++}>{inline(t.slice(2))}</li>); }
     else if (t === '---') { flushList(); out.push(<hr key={k++} />); }
     else if (t === '') { flushList(); }
+    else if (t.startsWith('//')) { /* source-level comment — not rendered */ }
     else { flushList(); out.push(<p key={k++}>{inline(t)}</p>); }
   }
   flushList();
@@ -1001,6 +1019,24 @@ function AlbumView({ event, onBack, onApprove }) {
   const [fetchError, setFetchError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [sortMode, setSortMode] = useState('chrono');
+
+  useEffect(() => {
+    if (!event?.id || !revealed) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('event_analytics')
+          .select('id, reveal_opened')
+          .eq('event_id', event.id)
+          .maybeSingle();
+        if (!data || data.reveal_opened) return;
+        await supabase
+          .from('event_analytics')
+          .update({ reveal_opened: true })
+          .eq('event_id', event.id);
+      } catch (_) {}
+    })();
+  }, [event?.id, revealed]);
 
   const handleDownloadAll = async () => {
     setDownloading(true);
@@ -1725,6 +1761,98 @@ function GuestAlbumView({ event, guestName, guestEmail }) {
   );
 }
 
+// ── ADMIN: Analytics Dashboard ────────────────────────────────────────────────
+function AnalyticsDashboard() {
+  const [rows, setRows] = useState(null);
+
+  useEffect(() => {
+    supabase
+      .from('event_analytics')
+      .select('*')
+      .then(({ data, error }) => {
+        if (error) { console.error('[AnalyticsDashboard]', error); setRows([]); return; }
+        setRows(data ?? []);
+      });
+  }, []);
+
+  if (rows === null) {
+    return <div className="analytics-loading">Loading…</div>;
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div>
+        <div className="section-title">Analytics <em>Dashboard</em></div>
+        <div className="section-sub">Event performance overview</div>
+        <div className="analytics-empty">No events recorded yet</div>
+      </div>
+    );
+  }
+
+  const total = rows.length;
+  const tierCounts = { momento: 0, classic: 0, premium: 0 };
+  rows.forEach(r => { if (r.tier in tierCounts) tierCounts[r.tier]++; });
+  const avgPhotosPerGuest = rows.reduce((sum, r) => sum + Number(r.photos_per_guest_avg), 0) / total;
+  const avgCompletionRate = rows.reduce((sum, r) => sum + Number(r.completion_rate), 0) / total;
+  const revealOpenedRate = (rows.filter(r => r.reveal_opened).length / total) * 100;
+  const archivePurchasedRate = (rows.filter(r => r.archive_purchased).length / total) * 100;
+
+  return (
+    <div>
+      <div className="section-title">Analytics <em>Dashboard</em></div>
+      <div className="section-sub">Event performance overview</div>
+
+      <div className="card">
+        <div className="card-title">Total Events</div>
+        <div className="analytics-big-num">{total}</div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Events by Tier</div>
+        {['momento', 'classic', 'premium'].map(tier => {
+          const count = tierCounts[tier];
+          const pct = (count / total) * 100;
+          return (
+            <div key={tier} className="analytics-tier-row">
+              <div className="analytics-tier-label">
+                <span className="analytics-tier-name">{tier.charAt(0).toUpperCase() + tier.slice(1)}</span>
+                <span className="analytics-tier-count">{count} ({pct.toFixed(0)}%)</span>
+              </div>
+              <div className="analytics-bar-track">
+                <div className="analytics-bar-fill" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card">
+        <div className="card-title">Guest Metrics</div>
+        <div className="analytics-metric-row">
+          <span className="analytics-metric-label">Avg photos per guest</span>
+          <span className="analytics-metric-value">{avgPhotosPerGuest.toFixed(1)}</span>
+        </div>
+        <div className="analytics-metric-row">
+          <span className="analytics-metric-label">Avg completion rate</span>
+          <span className="analytics-metric-value">{avgCompletionRate.toFixed(1)}%</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Engagement</div>
+        <div className="analytics-metric-row">
+          <span className="analytics-metric-label">Reveal opened</span>
+          <span className="analytics-metric-value">{revealOpenedRate.toFixed(1)}%</span>
+        </div>
+        <div className="analytics-metric-row">
+          <span className="analytics-metric-label">Archive purchased</span>
+          <span className="analytics-metric-value">{archivePurchasedRate.toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState("pricing");
   const viewRef = useRef("pricing");
@@ -1750,6 +1878,8 @@ export default function App() {
   const [initialShots, setInitialShots] = useState(0);
   const [guestName, setGuestName] = useState(null);
   const [guestEmail, setGuestEmail] = useState(null);
+
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
 
   // Legal page deep-links
   useEffect(() => {
@@ -1990,10 +2120,15 @@ export default function App() {
       <div className="app">
         <nav className="nav">
           <img src="/logo.svg" alt="Snapshot Co" style={{height: '40px'}} />
-          {user
-            ? <button className="btn btn-outline btn-sm" onClick={handleSignOut}>Sign Out</button>
-            : <button className="btn btn-outline btn-sm" onClick={() => setView("login")}>Sign In</button>
-          }
+          <div className="nav-actions">
+            {user && isAdmin && (
+              <button className="btn btn-outline btn-sm" onClick={() => setView("analytics")}>Analytics</button>
+            )}
+            {user
+              ? <button className="btn btn-outline btn-sm" onClick={handleSignOut}>Sign Out</button>
+              : <button className="btn btn-outline btn-sm" onClick={() => setView("login")}>Sign In</button>
+            }
+          </div>
         </nav>
 
         <main className="main">
@@ -2102,6 +2237,7 @@ export default function App() {
               {view === "guest-camera" && event && (
                 <GuestCamera event={event} takerId={takerId} sessionId={sessionId} initialShots={initialShots} />
               )}
+              {view === "analytics" && isAdmin && <AnalyticsDashboard />}
             </>
           )}
         </main>
