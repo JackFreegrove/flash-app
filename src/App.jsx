@@ -1684,6 +1684,11 @@ function rowToEvent(data) {
     photos: data.photos_per_guest,
     revealDate: new Date(data.reveal_time),
     isPublic: data.is_public,
+    // get_event_for_guest() (guest deep-link path, App.jsx ~1899) doesn't select tier
+    // or is_demo. isDemo safely resolves to false via its ?? fallback below, but tier
+    // has no fallback and comes back undefined for guest-facing events. Confirmed
+    // unused in guest-facing components via grep as of 2026-07-20 — re-check before
+    // relying on it in a guest-path component.
     isDemo: data.is_demo ?? false,
     tier: data.tier,
     approvedAt: data.approved_at ? new Date(data.approved_at) : null,
@@ -1896,7 +1901,7 @@ export default function App() {
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidPattern.test(eventId)) { setEventNotFound(true); return; }
     setLoadingEvent(true);
-    supabase.from('events').select('id, name, date, photos_per_guest, reveal_time, is_public, tier, approved_at, is_demo').eq('id', eventId).single()
+    supabase.rpc('get_event_for_guest', { p_event_id: eventId }).single()
       .then(async ({ data, error }) => {
         setLoadingEvent(false);
         if (error || !data) { setEventNotFound(true); return; }
