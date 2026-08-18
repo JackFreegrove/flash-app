@@ -1,5 +1,5 @@
 # Snapshot Co — Project Memory for Claude Code
-# Last updated: 7 June 2026 (session 6 — email sequence, storage cleanup, compression)
+# Last updated: 23 June 2026 (session 8 — Claude Code hooks, Privacy Policy DPO section)
 
 ---
 
@@ -65,6 +65,16 @@ flash-app/
 │   └── ...
 ├── public/
 │   └── logo.svg
+├── .claude/
+│   ├── hooks/
+│   │   ├── security-scan.js          # PreToolUse — blocks hardcoded secrets + dangerous bash patterns
+│   │   ├── memory-persist.js         # Stop — appends session timestamp to memory/sessions.log
+│   │   ├── package.json              # {"type":"commonjs"} — overrides project ESM for hook scripts
+│   │   └── test-scan.js              # 20-case test suite: node .claude/hooks/test-scan.js
+│   ├── commands/                     # Slash commands (new-feature, security-audit, etc.)
+│   ├── settings.local.json           # Permissions allowlist + hook registrations
+│   └── skills/
+├── privacy-policy.txt                # Rendered by PrivacyPage via renderMarkdown
 ├── vercel.json                       # Rewrites + active cron (cleanup-storage only)
 ├── DORMANT_CRONS.md                  # Cron entries ready to activate on Vercel Pro
 ├── CLAUDE.md                         # This file
@@ -184,6 +194,56 @@ If `sanitiseName(takerName)` returns empty (e.g. all-emoji input), `'guest'` is 
 
 ---
 
+## 5A. SECURITY DEFINER HELPER FUNCTIONS
+
+`events` RLS only exposes a row to two audiences: the owning host (`host_id = auth.uid()`) or
+anyone once the event is public, revealed, and approved (`is_public = true AND reveal_time <= now()
+AND approved_at IS NOT NULL`, for `photos`). An anonymous guest interacting with a **private**,
+not-yet-revealed event — the normal QR-scan flow — has no RLS path to read the underlying `events`
+row at all. Each function below exists to let one narrow, purpose-built check cross that wall
+without loosening the underlying policy or exposing the full row. All four: `SECURITY DEFINER`,
+`SET search_path TO 'public'`, `EXECUTE` granted to `anon`, `authenticated`, `service_role`.
+
+**`get_event_for_guest(p_event_id uuid)`**
+Returns `id, name, date, photos_per_guest, reveal_time, is_public, approved_at` for one event.
+Called directly as an RPC from App.jsx's guest deep-link handler (`/event/:id`), not wired to a
+table policy. Exists because `events` has no anon-readable SELECT policy for a private event by
+UUID — without it, guests scanning a private event's QR code got "Event not found" (fixed 2026-08-18).
+
+**`check_photo_insert_allowed(p_event_id uuid, p_taker_id text)`**
+Backs the `photos` INSERT policy `Guests can insert photos within event and shot limits`
+(`with_check = check_photo_insert_allowed(event_id, taker_name)`). Returns true only if the event's
+`reveal_time` is still in the future AND the taker's existing photo count is under `photos_per_guest`
+(counted with `FOR UPDATE` locking to serialise concurrent shutter taps). Exists because a plain
+policy expression can't read `events.reveal_time` for a private event, and can't take a row lock —
+both require running with elevated read access.
+
+**`check_photo_select_allowed(p_event_id uuid)`**
+Backs the `photos` SELECT policy `Photos visible after reveal or to host`
+(`qual = check_photo_select_allowed(event_id)`). Returns true if `host_id = auth.uid()` (host viewing
+their own event) OR the event is revealed, public, and approved. Exists for the same reason as
+`get_event_for_guest` — the underlying `host_id`/`reveal_time`/`is_public`/`approved_at` fields
+aren't readable by a guest through plain RLS on `events`.
+
+**`check_guest_session_insert_allowed(p_event_id uuid)`**
+Backs the `guest_sessions` INSERT policy `anon_insert_guest_sessions`
+(`with_check = check_guest_session_insert_allowed(event_id)`). Returns true if the event's
+`reveal_time` is still in the future. Replaces a raw correlated subquery
+(`EXISTS (SELECT 1 FROM events e WHERE e.id = guest_sessions.event_id AND e.reveal_time > now())`)
+that was evaluated under the *calling* role's RLS context — for a private event, anon couldn't see
+the `events` row at all, so the subquery always returned zero rows regardless of the real
+`reveal_time`, causing guest_sessions inserts to fail with 42501 for every private event
+(fixed 2026-08-18).
+
+**General pattern:** any future check that needs to read `events` (or another RLS-protected table)
+on behalf of an anonymous guest should follow this same SECURITY DEFINER approach — a small,
+purpose-built function with a pinned `search_path` — rather than a raw correlated subquery in the
+policy body. A raw subquery is evaluated under the *calling* role's RLS context and will silently
+return zero rows for anything the caller can't already see, which is exactly what caused the
+`check_guest_session_insert_allowed` bug.
+
+---
+
 ## 6. WHAT IS BUILT AND WORKING
 
 ### Core product
@@ -209,6 +269,13 @@ If `sanitiseName(takerName)` returns empty (e.g. all-emoji input), `'guest'` is 
 - Camera page locks proactively at reveal (30s interval, no tap required)
 - Download All button in host album view (zip via fflate)
 - Album sort toggle — chronological vs grouped by photographer
+- Privacy Policy DPO section — dedicated `## Data Protection Officer` heading between sections 1 and 2, showing Jack Freegrove / eventsnapshotco@gmail.com; source has `// TODO` to update email once Google Workspace is live. `renderMarkdown` strips `//` lines so they are invisible on the rendered page.
+
+### Claude Code hooks (23 June 2026)
+See section 13 for full detail. Summary:
+- `security-scan.js` — PreToolUse on Write/Edit/MultiEdit/Bash: blocks hardcoded Stripe/Supabase/Resend secrets and dangerous bash patterns (`curl | bash`, `rm -rf /`, fork bomb, etc.)
+- `memory-persist.js` — Stop hook: appends session timestamp to `memory/sessions.log`
+- Both registered in `.claude/settings.local.json`; hooks use `.claude/hooks/package.json` to declare CJS so `require()` works despite project `"type":"module"`
 
 ### Serverless hardening (7 June 2026)
 - 10s AbortController timeout on `supabase.auth.getUser` in `create-checkout-session.js` (Promise.race + AbortController)
@@ -348,3 +415,104 @@ Both handlers are fully built and tested. The only blocker is the Vercel Pro pla
 [CONSTRAINTS]: Any limitations
 [DO NOT TOUCH]: Related code that must not change
 ```
+
+---
+
+## CRITICAL — MCP CONFIGURATION — DO NOT TOUCH
+
+The following MCP servers are configured and working. They must never be modified, removed, or re-added without explicit instruction from Jack. Never run claude mcp add, claude mcp remove, or any command that modifies ~/.claude.json without Jack explicitly requesting it.
+
+WORKING MCP SERVERS (confirmed 13 June 2026):
+  - supabase  → connected (user-level, HTTP, 20 tools)
+  - github    → connected (user-level, HTTP, 44 tools)
+  - vercel    → connected (user-level, OAuth authenticated, 18 tools)
+
+HOW VERCEL MCP WORKS (do not redo this):
+  Vercel MCP uses OAuth — NOT API tokens. API tokens do not work.
+  If Vercel shows as failed in a future session:
+    Type /mcp inside Claude Code, select Vercel, re-authenticate in browser.
+    That is the only fix needed. Do not touch config files or create tokens.
+
+NEVER:
+  - Run claude mcp remove vercel
+  - Run claude mcp add vercel (any variant)
+  - Edit ~/.claude.json for MCP purposes
+  - Create Vercel API tokens for MCP use
+  - Modify any MCP server without Jack explicitly requesting it
+  - Assume an MCP is missing without checking /mcp first
+
+---
+
+## ANALYTICS LAYER — STATUS (13 June 2026)
+
+COMPLETE AND LIVE IN PRODUCTION:
+  - event_analytics table in Supabase — 13 columns, RLS enabled, 3 policies
+  - api/record-event-analytics.js — deployed and tested
+  - api/cron-reveal-notify.js — analytics call wired in (fire and forget)
+
+WRITTEN BUT NOT YET DEPLOYED (complete tomorrow):
+  - AnalyticsDashboard component — written to App.jsx
+  - Reveal-opened tracking useEffect — written to App.jsx
+  - VITE_ADMIN_EMAIL=hello@eventsnapshotco.com — in .env.local and Vercel
+
+BLOCKER: hello@eventsnapshotco.com has no Supabase auth password set.
+  Set the password first, then start dev server, log in as that account,
+  confirm Analytics tab appears, then deploy via Vercel MCP.
+
+---
+
+## MONTHLY INFRASTRUCTURE COSTS (planned)
+
+  Vercel Pro        $20/month   — needed to activate email crons
+  Supabase Pro      $25/month   — prevents free tier project pausing
+  Google Workspace  €5.20/month — business email inbox (set up before venue meetings)
+  Resend            Free tier   — 3,000 emails/month sufficient for launch
+  TOTAL             ~€46/month
+
+---
+
+## EMAIL — hello@eventsnapshotco.com
+
+  No working inbox exists. Resend is outbound only. Replies go nowhere.
+  Set up Google Workspace Starter before any venue or New Frontiers meetings.
+  This also resolves the Supabase auth password issue above.
+
+---
+
+## 13. CLAUDE CODE HOOKS (installed 22 June 2026)
+
+Two hooks are registered in `.claude/settings.local.json` and live in `.claude/hooks/`.
+
+### security-scan.js — PreToolUse (Write | Edit | MultiEdit | Bash)
+
+Blocks the operation and exits with code 2 if any of the following are detected:
+
+**Secret patterns in file content (Write/Edit/MultiEdit):**
+- Stripe secret key (`sk_test_*` / `sk_live_*`)
+- Stripe webhook secret (`whsec_*`)
+- Resend API key (`re_*` ≥ 24 chars)
+- JWT token that looks like a Supabase service role key (very long, 3-part base64url)
+
+**Safe skips:** `.env` / `.env.local` / `.envrc` files are not scanned. Lines containing
+`process.env.VARIABLE` or `import.meta.env.VARIABLE` are not scanned (those are env
+references, not hardcoded values). Comment lines (`//`, `*`, `#`) are also skipped.
+
+**Dangerous Bash patterns:**
+- `curl | bash` / `curl | sh` (or wget equivalents)
+- Fork bomb (`:(){ :|: & };:`)
+- `dd` writing to a block device (`/dev/sda`, `/dev/nvme*`, etc.)
+- `rm -r*` on dangerous targets: `/` (root), `~` (home), `.` (current dir), `*` (bare wildcard)
+
+**To bypass a false positive:** adjust the relevant pattern array at the top of
+`.claude/hooks/security-scan.js`, or temporarily rename the hook file.
+
+### memory-persist.js — Stop
+
+Runs when a Claude Code session ends. Appends one line to:
+`~/.claude/projects/C--Users-Jack-flash-app/memory/sessions.log`
+
+Format: `<ISO timestamp> | sid=<session-id-prefix> | memory_updated=<true|false>`
+
+`memory_updated` is `true` if any `.md` file in the memory directory was modified within
+the last 2 hours of the session. This creates an audit trail for when sessions occurred
+and whether memory was saved during them.
