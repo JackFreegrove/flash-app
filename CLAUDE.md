@@ -358,6 +358,7 @@ All server-only variables are set in Vercel dashboard. Frontend variables prefix
 10. ALWAYS match existing code style and naming conventions
 11. NEVER split App.jsx into multiple files
 12. NEVER modify email templates without confirming the change with Jack first
+13. ALWAYS — before ending any session that changed DB schema, RLS policies, or App.jsx behavior — propose one line for DECISION_LOG.md (see that file for the one-line format) and add it once Jack confirms.
 
 ---
 
