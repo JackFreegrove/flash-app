@@ -1,5 +1,5 @@
 # Snapshot Co — Project Memory for Claude Code
-# Last updated: 23 June 2026 (session 8 — Claude Code hooks, Privacy Policy DPO section)
+# Last updated: 16 September 2026 (session 9 — guest_sessions RLS remediation, storage upload RLS fix, GuestCamera Rules-of-Hooks fix)
 
 ---
 
@@ -201,7 +201,7 @@ anyone once the event is public, revealed, and approved (`is_public = true AND r
 AND approved_at IS NOT NULL`, for `photos`). An anonymous guest interacting with a **private**,
 not-yet-revealed event — the normal QR-scan flow — has no RLS path to read the underlying `events`
 row at all. Each function below exists to let one narrow, purpose-built check cross that wall
-without loosening the underlying policy or exposing the full row. All four: `SECURITY DEFINER`,
+without loosening the underlying policy or exposing the full row. All nine: `SECURITY DEFINER`,
 `SET search_path TO 'public'`, `EXECUTE` granted to `anon`, `authenticated`, `service_role`.
 
 **`get_event_for_guest(p_event_id uuid)`**
@@ -234,6 +234,56 @@ that was evaluated under the *calling* role's RLS context — for a private even
 the `events` row at all, so the subquery always returned zero rows regardless of the real
 `reveal_time`, causing guest_sessions inserts to fail with 42501 for every private event
 (fixed 2026-08-18).
+
+**`get_guest_session(p_event_id uuid, p_device_fingerprint text)`**
+Returns `id, completed, taker_name, photos_taken, email` for one guest_sessions row. Called
+directly as an RPC from App.jsx's guest resume-check (GuestEntry) and the deep-link
+returning-visitor check — not wired to a table policy. Exists because after
+anon_select_guest_sessions (a blanket `qual = true` policy exposing every guest's email and
+device fingerprint to any anonymous caller) was dropped, no anon-readable SELECT policy
+remained that could scope a read to just the caller's own row — RLS has no way to verify a
+client-claimed device_fingerprint against anything, so the read is scoped inside the function
+body instead (fixed 2026-09-15).
+
+**`create_guest_session(p_event_id uuid, p_device_fingerprint text, p_taker_name text)`**
+Returns the `id` of the newly created guest_sessions row. Called directly as an RPC from
+GuestEntry's handleOpen, replacing a raw `.insert(...).select('id').single()`. Exists because
+once anon_select_guest_sessions was dropped, a plain INSERT with `.select()` (PostgREST
+`return=representation`) required the newly-inserted row to satisfy a SELECT policy to be
+handed back — with none available to anon, every session creation failed with 42501 and
+rolled back entirely, even though the INSERT's own WITH CHECK (check_guest_session_insert_allowed)
+passed. The function performs the insert and returns the id directly, sidestepping the
+RETURNING-visibility check (fixed 2026-09-15).
+
+**`check_storage_upload_allowed(p_event_id uuid)`**
+Backs the `storage.objects` INSERT policy `Allow uploads to valid event paths`. Returns true
+if the event's `reveal_time` is still in the future — identical logic to
+check_guest_session_insert_allowed, kept as a separate function since it backs a different
+table's policy (avoids coupling storage upload rules to guest-session insert rules). Replaces
+a raw correlated subquery (`... IN (SELECT events.id FROM events WHERE events.reveal_time > now())`)
+that predated the 2026-08-18 fixes and was never updated to this pattern — same root cause as
+check_guest_session_insert_allowed's original bug, evaluated under the calling (anon) role's
+RLS context, silently rejecting every upload to a private, not-yet-revealed event regardless
+of the real reveal_time (fixed 2026-09-16).
+
+**`update_guest_session_progress(p_session_id uuid, p_device_fingerprint text, p_photos_taken integer, p_completed boolean)`**
+Called directly as an RPC from takeShot (photo count/completion after each shot) and
+GuestEntry's resume-check (auto-completing a session already at its photo limit) — both call
+sites do the same underlying write. Verifies device_fingerprint matches the target row inside
+the function body, then updates photos_taken/completed; raises check_violation (23514) if no
+row matches, so callers can distinguish a deterministic mismatch from a transient failure worth
+retrying. Exists because anon_update_guest_sessions's WITH CHECK compared the row to itself via
+a self-referential subquery — a plain SELECT against guest_sessions that, once
+anon_select_guest_sessions was dropped, resolves to NULL for anon, silently excluding every row
+from every update with no error raised. The original policy has been dropped entirely (was
+dead weight once bypassed by this function — left in place, it read as functional but
+permanently rejected everything) (fixed 2026-09-16).
+
+**`update_guest_session_email(p_session_id uuid, p_device_fingerprint text, p_email text)`**
+Called directly as an RPC from EmailCapture. Same verification and root cause as
+update_guest_session_progress — kept as a separate function since capturing contact info and
+tracking photo progress are different operations that happened to share one broken policy, not
+one operation (fixed 2026-09-16).
 
 **General pattern:** any future check that needs to read `events` (or another RLS-protected table)
 on behalf of an anonymous guest should follow this same SECURITY DEFINER approach — a small,
@@ -317,6 +367,14 @@ Idempotency: `reveal_notified_at` and `expiry_notified_at` columns on `events` p
 | Connect EventSnapshotCo.com to Vercel | DNS — waiting on domain registrar transfer |
 | Tighten Storage SELECT RLS policy | Guests should only be able to read their own event's photos |
 | Transactional email domain auth | hello@eventsnapshotco.com sending via Resend — confirm DKIM/SPF once DNS is live |
+| Add SECURITY DEFINER UPDATE policy on storage.objects | Pre-existing gap, predates 2026-09-16 session: no UPDATE policy exists on storage.objects at all, so `upsert: true` silently fails with 403/RLS whenever a shot's storage path already has an object — specifically breaks the documented "recover from a lost response" retry path in GuestCamera's takeShot. Needs a policy scoped the same way as check_storage_upload_allowed. |
+
+**Resolved 2026-09-15/16:** `guest_sessions` had two RLS vulnerabilities not previously listed
+here — the SELECT policy exposed every guest's email, taker name, and device fingerprint to any
+anonymous caller with no row-level filtering, and the UPDATE policy's WITH CHECK was a
+self-referential tautology that silently dropped every update once the SELECT policy was fixed
+(the stale policy itself has since been dropped, not just bypassed). Both fixed — see
+DECISION_LOG.md.
 
 ### Future only — do not build yet
 - Custom branding add-on (€49/event)
