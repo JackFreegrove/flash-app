@@ -65,6 +65,11 @@ const DEMO_EVENT = {
 // taker_name in the photos table stores a guest display name string (e.g. "Uncle Dave"),
 // mirroring guest_sessions.taker_name. It is not a foreign key ID.
 const sanitiseName = (str) => str.replace(/[^a-zA-Z0-9 \-_]/g, '').trim();
+const getDeviceId = () => {
+  let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id); }
+  return id;
+};
 
 // ── Palette & helpers ──────────────────────────────────────────────────────────
 const COLORS = {
@@ -1213,7 +1218,7 @@ function AlbumView({ event, onBack, onApprove }) {
 }
 
 // ── GUEST: Email capture (public events only) ─────────────────────────────────
-function EmailCapture({ sessionId }) {
+function EmailCapture({ sessionId, eventId }) {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1223,7 +1228,9 @@ function EmailCapture({ sessionId }) {
     if (!trimmed || saving) return;
     if (!EMAIL_PATTERN.test(trimmed)) return;
     setSaving(true);
-    await supabase.from('guest_sessions').update({ email: trimmed }).eq('id', sessionId);
+    await supabase.rpc('update_guest_session_email', { p_session_id: sessionId, p_device_fingerprint: `${eventId}|${getDeviceId()}`, p_email: trimmed })
+      .then(({ error }) => { if (error) console.error('guest_sessions email update error:', error); })
+      .catch((err) => console.error('guest_sessions email update error:', err));
     setSubmitted(true);
     setSaving(false);
   };
@@ -1282,6 +1289,9 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
   const [shotError, setShotError] = useState("");
   const [revealPassed, setRevealPassed] = useState(() => Date.now() > event.revealDate.getTime());
   const maxShots = event.photos;
+  const fingerprint = `${event.id}|${getDeviceId()}`;
+  const stepPlaceholders = useMemo(() => Array.from({ length: maxShots }), [maxShots]);
+  const filmPlaceholders = useMemo(() => Array.from({ length: maxShots }), [maxShots]);
 
   // Proactive reveal check: if the album reveals while the guest is on the camera
   // page, lock the shutter and surface a message without requiring a tap first.
@@ -1407,11 +1417,15 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
     setShots(newShots);
     const isComplete = newShots.length >= maxShots;
     if (sessionId) {
-      const sessionUpdate = { photos_taken: newShots.length, ...(isComplete ? { completed: true } : {}) };
-      supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+      const updateArgs = { p_session_id: sessionId, p_device_fingerprint: fingerprint, p_photos_taken: newShots.length, p_completed: isComplete };
+      supabase.rpc('update_guest_session_progress', updateArgs)
         .then(({ error }) => {
+          if (error && error.code === '23514') {
+            console.error('guest_sessions update rejected — session/device mismatch, not retrying:', error);
+            return;
+          }
           if (error) {
-            return supabase.from('guest_sessions').update(sessionUpdate).eq('id', sessionId)
+            return supabase.rpc('update_guest_session_progress', updateArgs)
               .then(({ error: retryError }) => {
                 if (retryError) console.error('guest_sessions update failed after retry:', retryError);
               });
@@ -1423,7 +1437,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       setTimeout(() => setDone(true), TIMINGS.DONE_DELAY_MS);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id]);
+  }, [shots, maxShots, flashing, uploading, switching, facingMode, takerId, event.id, fingerprint]);
 
   if (done) {
     return (
@@ -1437,7 +1451,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
             {new Date(event.revealDate).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}.<br /><br />
             Thank you for being part of <em>{event.name}</em>.
           </div>
-          {event.isPublic && sessionId && <EmailCapture sessionId={sessionId} />}
+          {event.isPublic && sessionId && <EmailCapture sessionId={sessionId} eventId={event.id} />}
         </div>
       </div>
     );
@@ -1464,7 +1478,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       </div>
 
       <div className="steps">
-        {useMemo(() => Array.from({ length: maxShots }), [maxShots]).map((_, i) => (
+        {stepPlaceholders.map((_, i) => (
           <div key={i} className={`step ${i < shots.length ? "done" : ""}`} />
         ))}
       </div>
@@ -1507,7 +1521,7 @@ function GuestCamera({ event, takerId, sessionId, initialShots = 0 }) {
       </div>
 
       <div className="film-strip">
-        {useMemo(() => Array.from({ length: maxShots }), [maxShots]).map((_, i) => (
+        {filmPlaceholders.map((_, i) => (
           <div key={i} className={`film-thumb ${i >= shots.length ? "film-thumb-empty" : ""}`}>
             {shots[i] ? <img src={shots[i].url} alt="" /> : null}
             <div className="film-thumb-num">{i + 1}</div>
@@ -1536,12 +1550,6 @@ function GuestEntry({ event, onEnter }) {
   const [starting, setStarting] = useState(false);
   const [entryError, setEntryError] = useState("");
 
-  const getDeviceId = () => {
-    let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id); }
-    return id;
-  };
-
   useEffect(() => {
     let active = true;
     setSessionStatus(null);
@@ -1549,24 +1557,15 @@ function GuestEntry({ event, onEnter }) {
     const deviceId = getDeviceId();
     const fingerprint = `${event.id}|${deviceId}`;
     supabase
-      .from('guest_sessions')
-      .select('id, completed, taker_name, photos_taken')
-      .eq('event_id', event.id)
-      .eq('device_fingerprint', fingerprint)
+      .rpc('get_guest_session', { p_event_id: event.id, p_device_fingerprint: fingerprint })
       .maybeSingle()
       .then(async ({ data, error: err }) => {
         if (!active) return;
         if (err || !data) { setSessionStatus('none'); return; }
         if (data.completed) { setSessionStatus('blocked'); return; }
-        const { data: photoRows } = await supabase
-          .from('photos')
-          .select('id')
-          .eq('event_id', event.id)
-          .eq('taker_name', data.taker_name);
-        if (!active) return;
-        const count = photoRows?.length ?? data.photos_taken;
+        const count = data.photos_taken;
         if (count >= event.photos) {
-          await supabase.from('guest_sessions').update({ completed: true, photos_taken: count }).eq('id', data.id);
+          await supabase.rpc('update_guest_session_progress', { p_session_id: data.id, p_device_fingerprint: fingerprint, p_photos_taken: count, p_completed: true });
           if (active) setSessionStatus('blocked');
           return;
         }
@@ -1585,9 +1584,7 @@ function GuestEntry({ event, onEnter }) {
     setEntryError("");
     const fingerprint = `${event.id}|${getDeviceId()}`;
     const { data, error: insertError } = await supabase
-      .from('guest_sessions')
-      .insert({ event_id: event.id, device_fingerprint: fingerprint, taker_name: trimmed, photos_taken: 0, completed: false })
-      .select('id')
+      .rpc('create_guest_session', { p_event_id: event.id, p_device_fingerprint: fingerprint, p_taker_name: trimmed })
       .single();
     if (insertError) {
       console.error('guest_sessions insert error:', insertError);
@@ -1917,10 +1914,7 @@ export default function App() {
           if (!deviceId) { setView("guest-album"); return; }
           const fingerprint = `${ev.id}|${deviceId}`;
           const { data: session } = await supabase
-            .from('guest_sessions')
-            .select('completed, taker_name, email')
-            .eq('event_id', ev.id)
-            .eq('device_fingerprint', fingerprint)
+            .rpc('get_guest_session', { p_event_id: ev.id, p_device_fingerprint: fingerprint })
             .maybeSingle();
           if (session?.completed) {
             setGuestName(session.taker_name);
