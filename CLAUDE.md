@@ -201,8 +201,12 @@ anyone once the event is public, revealed, and approved (`is_public = true AND r
 AND approved_at IS NOT NULL`, for `photos`). An anonymous guest interacting with a **private**,
 not-yet-revealed event — the normal QR-scan flow — has no RLS path to read the underlying `events`
 row at all. Each function below exists to let one narrow, purpose-built check cross that wall
-without loosening the underlying policy or exposing the full row. All nine: `SECURITY DEFINER`,
-`SET search_path TO 'public'`, `EXECUTE` granted to `anon`, `authenticated`, `service_role`.
+without loosening the underlying policy or exposing the full row. All ten share the same three
+technical properties: `SECURITY DEFINER`, `SET search_path TO 'public'`, `EXECUTE` granted to
+`anon`, `authenticated`, `service_role`. Nine of the ten exist specifically to cross the
+anon-guest RLS wall described above; the tenth (`consume_entitlement_on_event_insert`, listed
+last) is a trigger function serving an unrelated purpose — see its entry for why it's
+`SECURITY DEFINER` too.
 
 **`get_event_for_guest(p_event_id uuid)`**
 Returns `id, name, date, photos_per_guest, reveal_time, is_public, approved_at` for one event.
@@ -284,6 +288,19 @@ Called directly as an RPC from EmailCapture. Same verification and root cause as
 update_guest_session_progress — kept as a separate function since capturing contact info and
 tracking photo progress are different operations that happened to share one broken policy, not
 one operation (fixed 2026-09-16).
+
+**`consume_entitlement_on_event_insert()`** — trigger function, not an RPC, not wired to a policy
+Fires as `AFTER INSERT ON events FOR EACH ROW` (trigger `consume_entitlement_after_event_insert`).
+Returns immediately for a demo event (`is_demo = true`) — no entitlement consumed. Otherwise
+finds the host's most recent unused `entitlements` row matching the
+new event's `tier`, marks it `used = true`, and raises `check_violation` (23514) if none exists
+— this is what CreateEvent's error handler catches to show "No valid entitlement for tier: X"
+instead of a raw Postgres error. `SECURITY DEFINER` here isn't about crossing the anon-guest RLS
+wall like the other nine — it's needed because the inserting host has no RLS-granted UPDATE
+access to `entitlements` at all (no `entitlements` UPDATE policy exists for any client role;
+writes only happen via this trigger and the Stripe webhook's service-role client). Predates all
+nine RPCs above; omitted from this section until now — no functional change, documentation gap
+only (caught 2026-09-17).
 
 **General pattern:** any future check that needs to read `events` (or another RLS-protected table)
 on behalf of an anonymous guest should follow this same SECURITY DEFINER approach — a small,
