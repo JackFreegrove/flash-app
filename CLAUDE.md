@@ -1,5 +1,5 @@
 # Snapshot Co — Project Memory for Claude Code
-# Last updated: 16 September 2026 (session 9 — guest_sessions RLS remediation, storage upload RLS fix, GuestCamera Rules-of-Hooks fix)
+# Last updated: 17 September 2026 (session 10 — storage.objects UPDATE RLS fix)
 
 ---
 
@@ -260,10 +260,13 @@ passed. The function performs the insert and returns the id directly, sidesteppi
 RETURNING-visibility check (fixed 2026-09-15).
 
 **`check_storage_upload_allowed(p_event_id uuid)`**
-Backs the `storage.objects` INSERT policy `Allow uploads to valid event paths`. Returns true
-if the event's `reveal_time` is still in the future — identical logic to
-check_guest_session_insert_allowed, kept as a separate function since it backs a different
-table's policy (avoids coupling storage upload rules to guest-session insert rules). Replaces
+Backs both `storage.objects` write policies: the INSERT policy `Allow uploads to valid event
+paths` and the UPDATE policy `Allow updates to valid event paths` (added 2026-09-17, so that
+`upsert: true` retries in GuestCamera's takeShot stop 403ing when a shot's path already has an
+object — see DECISION_LOG.md). Returns true if the event's `reveal_time` is still in the future
+— identical logic to check_guest_session_insert_allowed, kept as a separate function since it
+backs a different table's policies (avoids coupling storage write rules to guest-session insert
+rules). Replaces
 a raw correlated subquery (`... IN (SELECT events.id FROM events WHERE events.reveal_time > now())`)
 that predated the 2026-08-18 fixes and was never updated to this pattern — same root cause as
 check_guest_session_insert_allowed's original bug, evaluated under the calling (anon) role's
@@ -384,7 +387,7 @@ Idempotency: `reveal_notified_at` and `expiry_notified_at` columns on `events` p
 | Connect EventSnapshotCo.com to Vercel | DNS — waiting on domain registrar transfer |
 | Tighten Storage SELECT RLS policy | Guests should only be able to read their own event's photos |
 | Transactional email domain auth | hello@eventsnapshotco.com sending via Resend — confirm DKIM/SPF once DNS is live |
-| Add SECURITY DEFINER UPDATE policy on storage.objects | Pre-existing gap, predates 2026-09-16 session: no UPDATE policy exists on storage.objects at all, so `upsert: true` silently fails with 403/RLS whenever a shot's storage path already has an object — specifically breaks the documented "recover from a lost response" retry path in GuestCamera's takeShot. Needs a policy scoped the same way as check_storage_upload_allowed. |
+| **Tighten event_analytics RLS to owning host** | **Live cross-tenant exposure, found 2026-09-17, next priority:** SELECT and UPDATE policies (`Authenticated users can read analytics` / `...update reveal_opened`) are `to authenticated` with unscoped `true` — any logged-in host account can read or modify any other host's event analytics right now, no special conditions needed. Needs host_id = auth.uid() scoping, likely via a SECURITY DEFINER function per the §5A pattern. |
 
 **Resolved 2026-09-15/16:** `guest_sessions` had two RLS vulnerabilities not previously listed
 here — the SELECT policy exposed every guest's email, taker name, and device fingerprint to any
