@@ -396,6 +396,18 @@ self-referential tautology that silently dropped every update once the SELECT po
 (the stale policy itself has since been dropped, not just bypassed). Both fixed — see
 DECISION_LOG.md.
 
+**Resolved 2026-09-17:** `storage.objects` had no UPDATE policy at all — only INSERT existed, so
+`upsert: true` retries silently 403'd whenever a shot's path already had an object, breaking
+GuestCamera's documented lost-response retry path in takeShot. Added `Allow updates to valid
+event paths`, reusing `check_storage_upload_allowed(event_id)` (the same function already backing
+the INSERT policy) for both `USING` and `WITH CHECK`. Verified live via `SET ROLE anon`: a
+positive control overwrote an existing object at a private, not-yet-revealed event's path, while
+negative controls confirmed a revealed event and a nonexistent event both still deny; `anon`
+already held the table-level UPDATE grant, so this was purely an RLS-policy gap, not a missing
+grant. Also verified end-to-end via the actual app client — real anon key, real Storage REST API,
+from the running dev server — where an upload followed by a retry against the same path returned
+the same object id with the retried bytes persisted. Fixed — see DECISION_LOG.md.
+
 ### Future only — do not build yet
 - Custom branding add-on (€49/event)
 - Venue licensing portal
