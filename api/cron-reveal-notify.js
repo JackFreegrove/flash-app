@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       try {
         fetch(`${process.env.VITE_SITE_URL || 'https://eventsnapshotco.com'}/api/record-event-analytics`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.CRON_SECRET}` },
           body: JSON.stringify({ event_id: event.id }),
         });
       } catch (_) {}

@@ -5,6 +5,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorised' });
+  }
+
   const { event_id } = req.body ?? {};
   if (!event_id) {
     return res.status(400).json({ error: 'event_id is required' });
